@@ -1,0 +1,253 @@
+using System.Collections.Concurrent;
+using System.Text;
+using System.Windows.Threading;
+using ProcessScribe.Models;
+
+namespace ProcessScribe.Services;
+
+/// <summary>
+/// Turns raw input events into ordered <see cref="Step"/>s. Hook callbacks
+/// enqueue lightweight events; a single background worker captures screenshots
+/// and builds steps in order, then raises <see cref="StepAdded"/> on the UI
+/// thread via the supplied dispatcher.
+/// </summary>
+public sealed class Recorder : IDisposable
+{
+    private enum RawKind { Click, Text, Special, Note, Flush }
+
+    private sealed class RawEvent
+    {
+        public RawKind Kind;
+        public int X;
+        public int Y;
+        public ClickButton Button;
+        public string Payload = ""; // typed char, special-key name, or note caption
+    }
+
+    public event Action<Step>? StepAdded;
+
+    private readonly Dispatcher _dispatcher;
+    private readonly string _shotsDir;
+    private readonly int _maxImageWidth;
+    private readonly InputHook _hook = new();
+    private readonly BlockingCollection<RawEvent> _queue = new();
+    private Task? _worker;
+
+    // Typed-text accumulation (worker thread only).
+    private readonly StringBuilder _typed = new();
+    private bool _typing;
+    private string _typedApp = "";
+    private string _typedWindow = "";
+
+    public Recorder(Dispatcher dispatcher, string sessionDir, int maxImageWidth)
+    {
+        _dispatcher = dispatcher;
+        _shotsDir = Path.Combine(sessionDir, "screenshots");
+        _maxImageWidth = maxImageWidth;
+        Directory.CreateDirectory(_shotsDir);
+    }
+
+    public void Start()
+    {
+        _hook.MouseClicked += OnMouseClicked;
+        _hook.TextTyped += OnTextTyped;
+        _hook.SpecialKey += OnSpecialKey;
+        _worker = Task.Factory.StartNew(Consume, TaskCreationOptions.LongRunning);
+        _hook.Start();
+    }
+
+    public void Stop()
+    {
+        _hook.Stop();
+        _hook.MouseClicked -= OnMouseClicked;
+        _hook.TextTyped -= OnTextTyped;
+        _hook.SpecialKey -= OnSpecialKey;
+
+        if (!_queue.IsAddingCompleted)
+        {
+            _queue.Add(new RawEvent { Kind = RawKind.Flush });
+            _queue.CompleteAdding();
+        }
+        try { _worker?.Wait(2000); } catch { /* ignore */ }
+    }
+
+    /// <summary>Insert a manual note/checkpoint with a screenshot of the screen.</summary>
+    public void AddNote(string caption)
+    {
+        if (_queue.IsAddingCompleted) return;
+        _queue.Add(new RawEvent { Kind = RawKind.Note, Payload = caption });
+    }
+
+    public void Dispose()
+    {
+        Stop();
+        _hook.Dispose();
+        _queue.Dispose();
+    }
+
+    // ---- hook handlers (UI thread) -> enqueue -------------------------------
+    private void OnMouseClicked(int x, int y, ClickButton button)
+    {
+        if (_queue.IsAddingCompleted) return;
+        _queue.Add(new RawEvent { Kind = RawKind.Click, X = x, Y = y, Button = button });
+    }
+
+    private void OnTextTyped(string ch)
+    {
+        if (_queue.IsAddingCompleted) return;
+        _queue.Add(new RawEvent { Kind = RawKind.Text, Payload = ch });
+    }
+
+    private void OnSpecialKey(string name)
+    {
+        if (_queue.IsAddingCompleted) return;
+        _queue.Add(new RawEvent { Kind = RawKind.Special, Payload = name });
+    }
+
+    // ---- worker (background thread) -----------------------------------------
+    private void Consume()
+    {
+        foreach (var ev in _queue.GetConsumingEnumerable())
+        {
+            switch (ev.Kind)
+            {
+                case RawKind.Click:
+                    FlushTyped();
+                    EmitClick(ev);
+                    break;
+                case RawKind.Text:
+                    if (!_typing)
+                    {
+                        _typing = true;
+                        (_typedWindow, _typedApp) = WindowTracker.GetActive();
+                    }
+                    _typed.Append(ev.Payload);
+                    break;
+                case RawKind.Special:
+                    HandleSpecial(ev.Payload);
+                    break;
+                case RawKind.Note:
+                    FlushTyped();
+                    EmitNote(ev.Payload);
+                    break;
+                case RawKind.Flush:
+                    FlushTyped();
+                    break;
+            }
+        }
+        FlushTyped();
+    }
+
+    private void HandleSpecial(string name)
+    {
+        if (name == "backspace")
+        {
+            if (_typing && _typed.Length > 0)
+                _typed.Remove(_typed.Length - 1, 1);
+            return;
+        }
+
+        FlushTyped();
+        var (window, app) = WindowTracker.GetActive();
+        string pretty = name switch
+        {
+            "enter" => "Enter",
+            "tab" => "Tab",
+            "esc" => "Esc",
+            _ => name
+        };
+        Emit(new Step
+        {
+            Kind = StepKind.Key,
+            Window = window,
+            App = app,
+            Caption = $"Press {pretty}."
+        });
+    }
+
+    private void EmitClick(RawEvent ev)
+    {
+        var (window, app) = WindowTracker.GetActive();
+        string? shot = null;
+        try
+        {
+            shot = ScreenCapturer.Capture(_shotsDir, ev.X, ev.Y, mark: true, _maxImageWidth);
+        }
+        catch { /* keep the step even if capture fails */ }
+
+        string appName = string.IsNullOrWhiteSpace(app) ? "the application" : app;
+        string caption = ev.Button switch
+        {
+            ClickButton.Right => $"Right-click at the highlighted location in {appName}.",
+            ClickButton.Middle => $"Middle-click at the highlighted location in {appName}.",
+            _ => $"Click at the highlighted location in {appName}."
+        };
+
+        Emit(new Step
+        {
+            Kind = StepKind.Click,
+            Window = window,
+            App = app,
+            Button = ev.Button.ToString().ToLowerInvariant(),
+            X = ev.X,
+            Y = ev.Y,
+            ScreenshotPath = shot,
+            Caption = caption
+        });
+    }
+
+    private void EmitNote(string caption)
+    {
+        var (window, app) = WindowTracker.GetActive();
+        string? shot = null;
+        try
+        {
+            shot = ScreenCapturer.Capture(_shotsDir, 0, 0, mark: false, _maxImageWidth);
+        }
+        catch { /* ignore */ }
+
+        Emit(new Step
+        {
+            Kind = StepKind.Note,
+            Window = window,
+            App = app,
+            ScreenshotPath = shot,
+            Caption = caption
+        });
+    }
+
+    private void FlushTyped()
+    {
+        if (!_typing || _typed.Length == 0)
+        {
+            _typing = false;
+            _typed.Clear();
+            return;
+        }
+        string text = _typed.ToString();
+        _typed.Clear();
+        _typing = false;
+
+        if (string.IsNullOrWhiteSpace(text)) return;
+
+        Emit(new Step
+        {
+            Kind = StepKind.Type,
+            Window = _typedWindow,
+            App = _typedApp,
+            Caption = $"Type \u201c{text}\u201d."
+        });
+    }
+
+    private void Emit(Step step)
+    {
+        // BeginInvoke (not Invoke) so the worker never blocks on the UI thread.
+        // Stop() waits on this worker, and a blocking Invoke here would deadlock
+        // until the timeout. Dispatcher keeps these in FIFO order.
+        try
+        {
+            _dispatcher.BeginInvoke(new Action(() => StepAdded?.Invoke(step)));
+        }
+        catch (TaskCanceledException) { /* shutting down */ }
+    }
+}

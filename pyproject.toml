@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "process-scribe"
+version = "0.1.0"
+description = "Record what you do in any app and auto-generate a step-by-step write-up with annotated screenshots."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+keywords = ["documentation", "screenshots", "automation", "cad", "tutorial", "sop"]
+dependencies = [
+    "pynput>=1.7",
+    "mss>=9.0",
+    "Pillow>=10.0",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+docx = ["python-docx>=1.1"]
+pdf = ["fpdf2>=2.7"]
+export = ["python-docx>=1.1", "fpdf2>=2.7"]
+dev = ["pytest>=8.0", "python-docx>=1.1", "fpdf2>=2.7"]
+
+[project.scripts]
+pscribe = "process_scribe.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

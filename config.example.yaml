@@ -1,0 +1,31 @@
+# ProcessScribe configuration. Copy to config.yaml and edit as needed.
+# Every value here is optional; defaults are shown.
+
+# Where session folders are written.
+output_dir: ~/ProcessScribe/sessions
+
+# Capture a screenshot on every click (recommended).
+capture_on_click: true
+
+# Capture on scroll too (off by default — usually too noisy).
+capture_on_scroll: false
+
+# Downscale screenshots to this width (px) to keep reports small.
+max_screenshot_width: 1600
+
+# Flush a run of typing into its own step after this many characters.
+type_flush_chars: 60
+
+# Global hotkeys (pynput syntax).
+stop_hotkey: "<ctrl>+<alt>+s"
+note_hotkey: "<ctrl>+<alt>+n"
+checkpoint_hotkey: "<ctrl>+<alt>+c"
+
+# Default document branding (used unless overridden with CLI flags).
+default_author: ""
+default_company: ""
+default_department: ""
+default_logo: ""        # path to a logo image, e.g. ~/brand/logo.png
+
+# PDF page size: "Letter" or "A4".
+pdf_page_size: "Letter"
