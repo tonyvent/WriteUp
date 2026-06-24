@@ -221,10 +221,10 @@ public sealed class Recorder : IDisposable
         // outline it in the screenshot. Best-effort — null on slow/secure windows.
         var el = UiaInspector.Describe(ev.X, ev.Y);
 
-        string? shot = null;
+        string? baseShot = null, zoomShot = null;
         try
         {
-            shot = ScreenCapturer.CaptureClick(_shotsDir, ev.X, ev.Y,
+            (baseShot, zoomShot) = ScreenCapturer.CaptureClick(_shotsDir, ev.X, ev.Y,
                 el?.Bounds ?? System.Drawing.Rectangle.Empty, _maxImageWidth);
         }
         catch { /* keep the step even if capture fails */ }
@@ -238,7 +238,8 @@ public sealed class Recorder : IDisposable
             Button = ev.Button.ToString().ToLowerInvariant(),
             X = ev.X,
             Y = ev.Y,
-            ScreenshotPath = shot,
+            ScreenshotPath = baseShot,
+            ZoomImagePath = zoomShot,
             Caption = ClickCaption(ev.Button, app, el)
         });
     }

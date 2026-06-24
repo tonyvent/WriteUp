@@ -128,11 +128,11 @@ public static class DocumentExporter
             pp.AddFormattedText(n + ".  ", TextFormat.Bold);
             pp.AddText(s.Caption);
 
-            if (s.HasScreenshot && File.Exists(s.ScreenshotPath!))
+            if (s.ImagePath is { } imgPath && File.Exists(imgPath))
             {
                 var ip = sec.AddParagraph();
                 ip.Format.SpaceBefore = Unit.FromCentimeter(0.12);
-                var img = ip.AddImage(s.ScreenshotPath);
+                var img = ip.AddImage(imgPath);
                 img.LockAspectRatio = true;
                 img.Width = Unit.FromCentimeter(15);
             }

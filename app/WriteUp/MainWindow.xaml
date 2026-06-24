@@ -158,11 +158,17 @@
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
 
-                                            <Border Grid.Column="0" Width="148" Height="84" CornerRadius="6"
-                                                    ClipToBounds="True" Background="#FFF0F0F2"
-                                                    Visibility="{Binding HasScreenshot, Converter={StaticResource BoolToVis}}">
-                                                <Image Source="{Binding ScreenshotPath}" Stretch="UniformToFill"/>
-                                            </Border>
+                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                <Border Width="148" Height="84" CornerRadius="6"
+                                                        ClipToBounds="True" Background="#FFF0F0F2"
+                                                        Visibility="{Binding HasScreenshot, Converter={StaticResource BoolToVis}}">
+                                                    <Image Source="{Binding ImagePath}" Stretch="UniformToFill"/>
+                                                </Border>
+                                                <CheckBox Content="Zoom inset" IsChecked="{Binding ShowZoom, Mode=TwoWay}"
+                                                          Margin="2,5,0,0" FontSize="10" Foreground="{StaticResource MutedBrush}"
+                                                          Visibility="{Binding HasZoom, Converter={StaticResource BoolToVis}}"
+                                                          ToolTip="Show or hide the magnified zoom window on this screenshot"/>
+                                            </StackPanel>
 
                                             <StackPanel Grid.Column="2" VerticalAlignment="Center">
                                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4">

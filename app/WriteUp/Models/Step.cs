@@ -23,8 +23,36 @@ public class Step : INotifyPropertyChanged
     public int X { get; set; }
     public int Y { get; set; }
 
-    /// <summary>Absolute path to the annotated screenshot, if any.</summary>
+    /// <summary>Annotated screenshot without the zoom inset (or the only image,
+    /// for notes/typing steps).</summary>
     public string? ScreenshotPath { get; set; }
+
+    /// <summary>Annotated screenshot that includes the magnified zoom window
+    /// (click steps only); null when there's no zoom variant.</summary>
+    public string? ZoomImagePath { get; set; }
+
+    private bool _showZoom = true;
+
+    /// <summary>Whether the zoom window is shown for this step (when one exists).
+    /// Toggled from the step list; drives both the thumbnail and the export.</summary>
+    public bool ShowZoom
+    {
+        get => _showZoom;
+        set
+        {
+            if (_showZoom == value) return;
+            _showZoom = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ImagePath));
+        }
+    }
+
+    /// <summary>True when a zoomed variant exists to toggle.</summary>
+    public bool HasZoom => !string.IsNullOrEmpty(ZoomImagePath);
+
+    /// <summary>The image actually displayed and exported: the zoomed variant
+    /// when enabled and available, otherwise the plain screenshot.</summary>
+    public string? ImagePath => ShowZoom && HasZoom ? ZoomImagePath : ScreenshotPath;
 
     private string _caption = "";
 

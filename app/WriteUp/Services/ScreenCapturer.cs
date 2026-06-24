@@ -16,64 +16,90 @@ public static class ScreenCapturer
 {
     private static readonly Color Accent = Color.FromArgb(138, 1, 1);
 
-    /// <summary>Capture the monitor under (globalX, globalY) for a click: draw a
-    /// pointer at the spot, outline the target control if known, and inset a zoom
-    /// of the surrounding area. Returns the saved PNG path.</summary>
-    public static string CaptureClick(string dir, int globalX, int globalY,
+    /// <summary>Capture the monitor under (globalX, globalY) for a click. Saves
+    /// two PNGs — one without the zoom inset and one with it — so the step can
+    /// toggle the zoom window on or off. Returns (baseShot, zoomShot) paths.</summary>
+    public static (string baseShot, string zoomShot) CaptureClick(string dir, int globalX, int globalY,
         Rectangle elementBounds, int maxWidth)
-        => CaptureInternal(dir, new Point(globalX, globalY), elementBounds, maxWidth, zoom: true);
+    {
+        Directory.CreateDirectory(dir);
+
+        var spot = new Point(globalX, globalY);
+        Rectangle mon = MonitorBoundsFor(spot);
+        int lx = spot.X - mon.Left;
+        int ly = spot.Y - mon.Top;
+
+        using var full = new Bitmap(mon.Width, mon.Height, PixelFormat.Format24bppRgb);
+        using (var g = Graphics.FromImage(full))
+            g.CopyFromScreen(mon.Left, mon.Top, 0, 0, mon.Size, CopyPixelOperation.SourceCopy);
+
+        // Outline the clicked control on the shared base, so it shows in both.
+        if (!elementBounds.IsEmpty)
+        {
+            var localEl = new Rectangle(elementBounds.X - mon.Left, elementBounds.Y - mon.Top,
+                                        elementBounds.Width, elementBounds.Height);
+            using var g = Graphics.FromImage(full);
+            DrawElementBox(g, localEl);
+        }
+
+        // Zoomed variant: copy the base, add the inset, then the pointer.
+        using var zoomed = (Bitmap)full.Clone();
+        using (var g = Graphics.FromImage(zoomed))
+        {
+            DrawZoomInset(g, zoomed, lx, ly, mon.Size);
+            DrawPointer(g, lx, ly);
+        }
+
+        // Base variant: pointer only (no zoom inset).
+        using (var g = Graphics.FromImage(full))
+            DrawPointer(g, lx, ly);
+
+        string stamp = $"{DateTime.Now:HHmmss_fff}";
+        string basePath = Path.Combine(dir, stamp + ".png");
+        string zoomPath = Path.Combine(dir, stamp + "_zoom.png");
+        SaveScaled(full, basePath, maxWidth);
+        SaveScaled(zoomed, zoomPath, maxWidth);
+        return (basePath, zoomPath);
+    }
 
     /// <summary>Capture the monitor the cursor is currently on, for notes and
     /// typing steps. Marks the pointer but adds no zoom inset.</summary>
     public static string CaptureContext(string dir, int maxWidth)
-        => CaptureInternal(dir, CursorPos(), Rectangle.Empty, maxWidth, zoom: false);
-
-    private static string CaptureInternal(string dir, Point spot, Rectangle elementBounds,
-        int maxWidth, bool zoom)
     {
         Directory.CreateDirectory(dir);
 
+        Point spot = CursorPos();
         Rectangle mon = MonitorBoundsFor(spot);
         using var full = new Bitmap(mon.Width, mon.Height, PixelFormat.Format24bppRgb);
         using (var g = Graphics.FromImage(full))
         {
             g.CopyFromScreen(mon.Left, mon.Top, 0, 0, mon.Size, CopyPixelOperation.SourceCopy);
-
-            int lx = spot.X - mon.Left;
-            int ly = spot.Y - mon.Top;
-
-            Rectangle localEl = Rectangle.Empty;
-            if (!elementBounds.IsEmpty)
-            {
-                localEl = new Rectangle(elementBounds.X - mon.Left, elementBounds.Y - mon.Top,
-                                        elementBounds.Width, elementBounds.Height);
-                DrawElementBox(g, localEl);
-            }
-
-            if (zoom)
-                DrawZoomInset(g, full, lx, ly, mon.Size);
-
-            DrawPointer(g, lx, ly);
+            DrawPointer(g, spot.X - mon.Left, spot.Y - mon.Top);
         }
 
-        Bitmap toSave = full;
+        string path = Path.Combine(dir, $"{DateTime.Now:HHmmss_fff}.png");
+        SaveScaled(full, path, maxWidth);
+        return path;
+    }
+
+    /// <summary>Downscale to maxWidth (if wider) and save as PNG.</summary>
+    private static void SaveScaled(Bitmap bmp, string path, int maxWidth)
+    {
+        Bitmap toSave = bmp;
         Bitmap? scaled = null;
-        if (maxWidth > 0 && full.Width > maxWidth)
+        if (maxWidth > 0 && bmp.Width > maxWidth)
         {
-            int h = (int)Math.Round(full.Height * (maxWidth / (double)full.Width));
+            int h = (int)Math.Round(bmp.Height * (maxWidth / (double)bmp.Width));
             scaled = new Bitmap(maxWidth, h);
             using (var g = Graphics.FromImage(scaled))
             {
                 g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                g.DrawImage(full, 0, 0, maxWidth, h);
+                g.DrawImage(bmp, 0, 0, maxWidth, h);
             }
             toSave = scaled;
         }
-
-        string path = Path.Combine(dir, $"{DateTime.Now:HHmmss_fff}.png");
         toSave.Save(path, ImageFormat.Png);
         scaled?.Dispose();
-        return path;
     }
 
     private static Rectangle MonitorBoundsFor(Point p)

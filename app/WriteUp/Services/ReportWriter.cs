@@ -70,7 +70,7 @@ public static class ReportWriter
     private static string RelativeShot(Step s)
     {
         // Reports are written into the session folder, screenshots live in ./screenshots
-        var name = Path.GetFileName(s.ScreenshotPath!);
+        var name = Path.GetFileName(s.ImagePath!);
         return "screenshots/" + name;
     }
 
@@ -114,7 +114,7 @@ public static class ReportWriter
             n++;
             sb.Append("<div class='step'><div class='num'>").Append(n).Append("</div><div class='body'><p>")
               .Append(Enc(s.Caption)).Append("</p>");
-            string? img = EmbedImage(s.ScreenshotPath);
+            string? img = EmbedImage(s.ImagePath);
             if (img != null)
                 sb.Append("<img src='").Append(img).Append("' alt='Step ").Append(n).Append("'>");
             sb.Append("</div></div>");

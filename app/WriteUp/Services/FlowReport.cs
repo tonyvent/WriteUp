@@ -83,7 +83,7 @@ public static class FlowReport
             sp.Inlines.Add(new Run(s.Caption));
             doc.Blocks.Add(sp);
 
-            var bmp = LoadImage(s.ScreenshotPath, 720);
+            var bmp = LoadImage(s.ImagePath, 720);
             if (bmp != null)
             {
                 var img = new Image { Source = bmp, Stretch = Stretch.Uniform, MaxWidth = 660,
