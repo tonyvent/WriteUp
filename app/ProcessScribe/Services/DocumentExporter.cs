@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using MigraDoc.DocumentObjectModel;
 using MigraDoc.Rendering;

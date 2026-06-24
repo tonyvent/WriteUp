@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
+using System.IO;
 using System.Text;
+using System.Threading.Tasks;
 using System.Windows.Threading;
 using ProcessScribe.Models;
 
