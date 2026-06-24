@@ -104,6 +104,15 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool GetCursorPos(out POINT lpPoint);
 
+    // ---- Window under a point (to tell a real click from a focus switch) ----
+    public const uint GA_ROOT = 2;
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr WindowFromPoint(POINT Point);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetAncestor(IntPtr hwnd, uint gaFlags);
+
     // ---- Keyboard translation ----------------------------------------------
     [DllImport("user32.dll")]
     public static extern short GetKeyState(int nVirtKey);

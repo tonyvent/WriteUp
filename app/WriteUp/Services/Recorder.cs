@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Text;
@@ -23,6 +24,7 @@ public sealed class Recorder : IDisposable
         public int X;
         public int Y;
         public ClickButton Button;
+        public int ForegroundPid;   // active app at the instant of the click
         public string Payload = ""; // typed char, special-key name, or note caption
     }
 
@@ -38,9 +40,17 @@ public sealed class Recorder : IDisposable
     // Typed-text accumulation (worker thread only).
     private readonly StringBuilder _typed = new();
     private bool _typing;
+    private bool _typedIgnore;          // typing happened in our own window — drop it
     private string _typedApp = "";
     private string _typedWindow = "";
     private string _typedField = "";   // focused control name when typing began
+
+    // Focus tracking (worker thread only) so we can ignore our own window and
+    // clicks that merely switch/activate a different application. Tracked by
+    // process so in-app dialogs/menus (same process) still record normally.
+    private int _ownPid;
+    private string _lastApp = "";       // last external app/window we recorded in,
+    private string _lastWindow = "";    // reused for notes so they stay in-section
 
     public Recorder(Dispatcher dispatcher, string sessionDir, int maxImageWidth)
     {
@@ -52,6 +62,7 @@ public sealed class Recorder : IDisposable
 
     public void Start()
     {
+        _ownPid = Environment.ProcessId;
         _hook.MouseClicked += OnMouseClicked;
         _hook.TextTyped += OnTextTyped;
         _hook.SpecialKey += OnSpecialKey;
@@ -92,7 +103,10 @@ public sealed class Recorder : IDisposable
     private void OnMouseClicked(int x, int y, ClickButton button)
     {
         if (_queue.IsAddingCompleted) return;
-        _queue.Add(new RawEvent { Kind = RawKind.Click, X = x, Y = y, Button = button });
+        // Capture the active app *now*, before this click activates anything, so
+        // we can tell a real in-app click from one that just switches apps.
+        int fgPid = WindowTracker.ProcessIdOf(NativeMethods.GetForegroundWindow());
+        _queue.Add(new RawEvent { Kind = RawKind.Click, X = x, Y = y, Button = button, ForegroundPid = fgPid });
     }
 
     private void OnTextTyped(string ch)
@@ -122,10 +136,15 @@ public sealed class Recorder : IDisposable
                     if (!_typing)
                     {
                         _typing = true;
-                        (_typedWindow, _typedApp) = WindowTracker.GetActive();
+                        var (hwnd, window, app) = WindowTracker.GetActiveInfo();
+                        int pid = WindowTracker.ProcessIdOf(hwnd);
+                        _typedWindow = window;
+                        _typedApp = app;
                         _typedField = UiaInspector.FocusedName();
+                        _typedIgnore = pid == _ownPid;   // typing inside WriteUp itself
+                        if (!_typedIgnore) { _lastApp = app; _lastWindow = window; }
                     }
-                    _typed.Append(ev.Payload);
+                    if (!_typedIgnore) _typed.Append(ev.Payload);
                     break;
                 case RawKind.Special:
                     HandleSpecial(ev.Payload);
@@ -152,7 +171,13 @@ public sealed class Recorder : IDisposable
         }
 
         FlushTyped();
-        var (window, app) = WindowTracker.GetActive();
+        var (hwnd, window, app) = WindowTracker.GetActiveInfo();
+        int pid = WindowTracker.ProcessIdOf(hwnd);
+        if (pid == _ownPid) return;  // ignore keys pressed in WriteUp itself
+
+        _lastApp = app;
+        _lastWindow = window;
+
         string pretty = name switch
         {
             "enter" => "Enter",
@@ -165,13 +190,32 @@ public sealed class Recorder : IDisposable
             Kind = StepKind.Key,
             Window = window,
             App = app,
+            Context = app,
             Caption = $"Press {pretty}."
         });
     }
 
     private void EmitClick(RawEvent ev)
     {
-        var (window, app) = WindowTracker.GetActive();
+        // Resolve the top-level window actually under the cursor (not the
+        // post-click foreground, which races with activation).
+        IntPtr target = NativeMethods.WindowFromPoint(new NativeMethods.POINT { x = ev.X, y = ev.Y });
+        IntPtr root = target != IntPtr.Zero ? NativeMethods.GetAncestor(target, NativeMethods.GA_ROOT) : IntPtr.Zero;
+        int targetPid = WindowTracker.ProcessIdOf(root);
+
+        // Skip clicks that aren't real actions:
+        //  • clicks inside WriteUp itself, and
+        //  • clicks on a window that wasn't the active app — i.e. the click just
+        //    switched/activated another application, which isn't a step.
+        // In-app dialogs/menus share the active app's process, so they record.
+        bool ours = targetPid == _ownPid;
+        bool switchedApp = ev.ForegroundPid != 0 && targetPid != ev.ForegroundPid;
+        if (ours || switchedApp)
+            return;
+
+        var (window, app) = WindowTracker.DescribeWindow(root);
+        _lastApp = app;
+        _lastWindow = window;
 
         // Ask UI Automation what's under the cursor so we can name the control and
         // outline it in the screenshot. Best-effort — null on slow/secure windows.
@@ -190,6 +234,7 @@ public sealed class Recorder : IDisposable
             Kind = StepKind.Click,
             Window = window,
             App = app,
+            Context = app,
             Button = ev.Button.ToString().ToLowerInvariant(),
             X = ev.X,
             Y = ev.Y,
@@ -242,7 +287,10 @@ public sealed class Recorder : IDisposable
 
     private void EmitNote(string caption)
     {
-        var (window, app) = WindowTracker.GetActive();
+        // A note is added from WriteUp's own button, so the foreground would be
+        // WriteUp — keep the note in the section of the last app the user worked in.
+        string app = _lastApp;
+        string window = _lastWindow;
         string? shot = null;
         try
         {
@@ -255,6 +303,7 @@ public sealed class Recorder : IDisposable
             Kind = StepKind.Note,
             Window = window,
             App = app,
+            Context = app,
             ScreenshotPath = shot,
             Caption = caption
         });
@@ -262,9 +311,11 @@ public sealed class Recorder : IDisposable
 
     private void FlushTyped()
     {
-        if (!_typing || _typed.Length == 0)
+        bool ignore = _typedIgnore;
+        if (!_typing || _typed.Length == 0 || ignore)
         {
             _typing = false;
+            _typedIgnore = false;
             _typed.Clear();
             _typedField = "";
             return;
@@ -284,6 +335,7 @@ public sealed class Recorder : IDisposable
             Kind = StepKind.Type,
             Window = _typedWindow,
             App = _typedApp,
+            Context = _typedApp,
             Caption = $"Type \u201c{text}\u201d{into}."
         });
     }

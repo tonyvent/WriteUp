@@ -120,10 +120,10 @@ public static class DocumentExporter
         string? current = null;
         foreach (var s in steps)
         {
-            if (!string.IsNullOrWhiteSpace(s.App) && s.App != current)
+            if (!string.IsNullOrWhiteSpace(s.Context) && s.Context != current)
             {
-                current = s.App;
-                var hp = sec.AddParagraph("IN " + s.App.ToUpperInvariant());
+                current = s.Context;
+                var hp = sec.AddParagraph("IN " + s.Context.ToUpperInvariant());
                 hp.Format.Font.Size = 10;
                 hp.Format.Font.Bold = true;
                 hp.Format.Font.Color = Accent;

@@ -52,10 +52,10 @@ public static class ReportWriter
         string? currentApp = null;
         foreach (var s in steps)
         {
-            if (!string.IsNullOrWhiteSpace(s.App) && s.App != currentApp)
+            if (!string.IsNullOrWhiteSpace(s.Context) && s.Context != currentApp)
             {
-                currentApp = s.App;
-                sb.AppendLine().Append("## In ").AppendLine(s.App).AppendLine();
+                currentApp = s.Context;
+                sb.AppendLine().Append("## In ").AppendLine(s.Context).AppendLine();
             }
             n++;
             sb.Append("**").Append(n).Append(".** ").AppendLine(s.Caption);
@@ -114,10 +114,10 @@ public static class ReportWriter
         string? currentApp = null;
         foreach (var s in steps)
         {
-            if (!string.IsNullOrWhiteSpace(s.App) && s.App != currentApp)
+            if (!string.IsNullOrWhiteSpace(s.Context) && s.Context != currentApp)
             {
-                currentApp = s.App;
-                sb.Append("<h2>In ").Append(Enc(s.App)).Append("</h2>");
+                currentApp = s.Context;
+                sb.Append("<h2>In ").Append(Enc(s.Context)).Append("</h2>");
             }
             n++;
             sb.Append("<div class='step'><div class='num'>").Append(n).Append("</div><div class='body'><p>")

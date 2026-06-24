@@ -42,6 +42,22 @@ public class Step : INotifyPropertyChanged
 
     public bool HasScreenshot => !string.IsNullOrEmpty(ScreenshotPath);
 
+    private string _context = "";
+
+    /// <summary>Editable, generic app/window label used to group steps into
+    /// sections in the report (e.g. "Google Chrome", "CAD", "your drawing").
+    /// Defaults to the detected app; the user can rename it before exporting.</summary>
+    public string Context
+    {
+        get => _context;
+        set
+        {
+            if (_context == value) return;
+            _context = value;
+            OnPropertyChanged();
+        }
+    }
+
     public string KindLabel => Kind switch
     {
         StepKind.Click => "Click",

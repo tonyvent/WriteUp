@@ -77,10 +77,10 @@ public static class FlowReport
         string? current = null;
         foreach (var s in steps)
         {
-            if (!string.IsNullOrWhiteSpace(s.App) && s.App != current)
+            if (!string.IsNullOrWhiteSpace(s.Context) && s.Context != current)
             {
-                current = s.App;
-                doc.Blocks.Add(new Paragraph(new Run("IN " + s.App.ToUpperInvariant()))
+                current = s.Context;
+                doc.Blocks.Add(new Paragraph(new Run("IN " + s.Context.ToUpperInvariant()))
                 { Foreground = Accent, FontWeight = FontWeights.Bold, FontSize = 12, Margin = new Thickness(0, 14, 0, 2) });
             }
 

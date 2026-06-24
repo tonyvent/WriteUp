@@ -184,8 +184,13 @@
                                                         <TextBlock Text="{Binding KindLabel}" FontSize="11"
                                                                    FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
                                                     </Border>
-                                                    <TextBlock Text="{Binding AppLabel}" FontSize="11" Margin="8,0,0,0"
+                                                    <TextBlock Text="in" FontSize="11" Margin="8,0,4,0"
                                                                VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}"/>
+                                                    <TextBox Text="{Binding Context, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                             FontSize="11" Padding="6,1" MinWidth="90" VerticalAlignment="Center"
+                                                             BorderBrush="{StaticResource LineBrush}" BorderThickness="1"
+                                                             Foreground="{StaticResource MutedBrush}"
+                                                             ToolTip="Section label — rename this category before exporting (e.g. CAD, your drawing). Applies to the whole visit to this app."/>
                                                 </StackPanel>
                                                 <TextBox Text="{Binding Caption, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                          TextWrapping="Wrap" AcceptsReturn="True" BorderThickness="0"
