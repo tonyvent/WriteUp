@@ -13,7 +13,7 @@ namespace WriteUp.Services;
 /// report, for the live in-app preview pane.</summary>
 public static class FlowReport
 {
-    private static readonly Brush Accent = Frozen(Color.FromRgb(0xFF, 0x4C, 0x1F));
+    private static readonly Brush Accent = Frozen(Color.FromRgb(0x8A, 0x01, 0x01));
     private static readonly Brush Muted = Frozen(Color.FromRgb(0x6B, 0x6B, 0x6B));
 
     private static Brush Frozen(Color c)

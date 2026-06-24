@@ -4,8 +4,8 @@
              StartupUri="MainWindow.xaml">
     <Application.Resources>
         <!-- Palette -->
-        <Color x:Key="AccentColor">#FFFF4C1F</Color>
-        <SolidColorBrush x:Key="AccentBrush" Color="#FFFF4C1F"/>
+        <Color x:Key="AccentColor">#FF8A0101</Color>
+        <SolidColorBrush x:Key="AccentBrush" Color="#FF8A0101"/>
         <SolidColorBrush x:Key="StopBrush" Color="#FFE5484D"/>
         <SolidColorBrush x:Key="InkBrush" Color="#FF1A1A1A"/>
         <SolidColorBrush x:Key="MutedBrush" Color="#FF6B6B6B"/>

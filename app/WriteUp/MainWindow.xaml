@@ -166,7 +166,7 @@
 
                                             <StackPanel Grid.Column="2" VerticalAlignment="Center">
                                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                                    <Border Background="#FFFFEDE6" CornerRadius="4" Padding="6,2">
+                                                    <Border Background="#FFF3E5E5" CornerRadius="4" Padding="6,2">
                                                         <TextBlock Text="{Binding KindLabel}" FontSize="11"
                                                                    FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
                                                     </Border>

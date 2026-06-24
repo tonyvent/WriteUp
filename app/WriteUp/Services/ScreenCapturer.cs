@@ -14,7 +14,7 @@ namespace WriteUp.Services;
 /// </summary>
 public static class ScreenCapturer
 {
-    private static readonly Color Accent = Color.FromArgb(255, 76, 31);
+    private static readonly Color Accent = Color.FromArgb(138, 1, 1);
 
     /// <summary>Capture the monitor under (globalX, globalY) for a click: draw a
     /// pointer at the spot, outline the target control if known, and inset a zoom

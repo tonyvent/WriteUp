@@ -14,7 +14,7 @@ namespace WriteUp.Services;
 /// </summary>
 public static class DocumentExporter
 {
-    private static readonly Color Accent = new(255, 76, 31);
+    private static readonly Color Accent = new(138, 1, 1);
     private static readonly Color Muted = new(107, 107, 107);
 
     public static void SavePdf(SessionMeta m, IReadOnlyList<Step> steps, string path, string pageSize = "Letter")

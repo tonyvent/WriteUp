@@ -140,7 +140,7 @@ public static class ReportWriter
     private static string Enc(string s) => WebUtility.HtmlEncode(s);
 
     private const string Css = @"
-:root { --accent:#ff4c1f; --ink:#1a1a1a; --muted:#6b6b6b; --line:#e7e7e7; }
+:root { --accent:#8a0101; --ink:#1a1a1a; --muted:#6b6b6b; --line:#e7e7e7; }
 * { box-sizing:border-box; }
 body { margin:0; font:16px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; color:var(--ink); background:#fafafa; }
 .wrap { max-width:820px; margin:0 auto; padding:48px 24px 96px; }
