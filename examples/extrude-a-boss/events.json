@@ -1,0 +1,89 @@
+{
+  "name": "extrude-a-boss",
+  "started": "2026-06-24T10:00:00",
+  "finished": "2026-06-24T10:00:10",
+  "meta": {
+    "title": "How to Extrude a Boss in Fusion",
+    "subtitle": "Standard operating procedure for the base flange",
+    "author": "Jordan Lee",
+    "company": "Acme Manufacturing",
+    "department": "Mechanical Design",
+    "date": "2026-06-24",
+    "revision": "1.0",
+    "logo": "examples/acme-logo.png"
+  },
+  "events": [
+    {
+      "index": 1,
+      "kind": "window",
+      "timestamp": "2026-06-24T10:00:01",
+      "window": "Part1 - Autodesk Fusion",
+      "app": "Autodesk Fusion",
+      "text": "",
+      "button": "",
+      "x": null,
+      "y": null,
+      "screenshot": null
+    },
+    {
+      "index": 2,
+      "kind": "click",
+      "timestamp": "2026-06-24T10:00:02",
+      "window": "",
+      "app": "Autodesk Fusion",
+      "text": "",
+      "button": "left",
+      "x": 180,
+      "y": 110,
+      "screenshot": "screenshots/0001.png"
+    },
+    {
+      "index": 3,
+      "kind": "click",
+      "timestamp": "2026-06-24T10:00:05",
+      "window": "",
+      "app": "Autodesk Fusion",
+      "text": "",
+      "button": "left",
+      "x": 640,
+      "y": 300,
+      "screenshot": "screenshots/0002.png"
+    },
+    {
+      "index": 4,
+      "kind": "type",
+      "timestamp": "2026-06-24T10:00:07",
+      "window": "",
+      "app": "Autodesk Fusion",
+      "text": "25 mm",
+      "button": "",
+      "x": null,
+      "y": null,
+      "screenshot": null
+    },
+    {
+      "index": 5,
+      "kind": "key",
+      "timestamp": "2026-06-24T10:00:08",
+      "window": "",
+      "app": "",
+      "text": "enter",
+      "button": "",
+      "x": null,
+      "y": null,
+      "screenshot": null
+    },
+    {
+      "index": 6,
+      "kind": "note",
+      "timestamp": "2026-06-24T10:00:09",
+      "window": "",
+      "app": "Autodesk Fusion",
+      "text": "Verify the body shows in the timeline.",
+      "button": "",
+      "x": null,
+      "y": null,
+      "screenshot": null
+    }
+  ]
+}

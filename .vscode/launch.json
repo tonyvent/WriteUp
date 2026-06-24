@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "pscribe: record",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "process_scribe",
+      "args": ["record", "--name", "Debug session"],
+      "console": "integratedTerminal",
+      "env": { "PYTHONPATH": "${workspaceFolder}/src" }
+    },
+    {
+      "name": "pscribe: report (example)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "process_scribe",
+      "args": ["report", "examples/extrude-a-boss"],
+      "console": "integratedTerminal",
+      "env": { "PYTHONPATH": "${workspaceFolder}/src" }
+    }
+  ]
+}
