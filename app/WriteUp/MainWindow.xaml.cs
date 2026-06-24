@@ -71,7 +71,7 @@ public partial class MainWindow : Window
     private void OnStepEdited(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         // Renaming one step's section label renames the whole contiguous visit to
-        // that app, so the user edits a category once rather than step-by-step.
+        // that surface/app, so the user edits a category once, not step-by-step.
         if (!_propagatingContext && e.PropertyName == nameof(Step.Context) && sender is Step s)
             PropagateContext(s);
         SchedulePreview();
@@ -80,23 +80,23 @@ public partial class MainWindow : Window
     private void PropagateContext(Step edited)
     {
         int i = _vm.Steps.IndexOf(edited);
-        if (i < 0 || string.IsNullOrWhiteSpace(edited.App)) return;  // notes/unknown: leave alone
+        if (i < 0 || string.IsNullOrWhiteSpace(edited.AutoContext)) return;  // unknown: leave alone
 
-        string app = edited.App;
+        string visit = edited.AutoContext;
         string value = edited.Context;
         _propagatingContext = true;
         try
         {
-            for (int j = i - 1; j >= 0 && SameVisit(_vm.Steps[j], app); j--)
+            for (int j = i - 1; j >= 0 && SameVisit(_vm.Steps[j], visit); j--)
                 _vm.Steps[j].Context = value;
-            for (int j = i + 1; j < _vm.Steps.Count && SameVisit(_vm.Steps[j], app); j++)
+            for (int j = i + 1; j < _vm.Steps.Count && SameVisit(_vm.Steps[j], visit); j++)
                 _vm.Steps[j].Context = value;
         }
         finally { _propagatingContext = false; }
     }
 
-    private static bool SameVisit(Step s, string app) =>
-        string.Equals(s.App, app, StringComparison.OrdinalIgnoreCase);
+    private static bool SameVisit(Step s, string autoContext) =>
+        string.Equals(s.AutoContext, autoContext, StringComparison.OrdinalIgnoreCase);
 
     private void SchedulePreview()
     {

@@ -49,8 +49,10 @@ public sealed class Recorder : IDisposable
     // clicks that merely switch/activate a different application. Tracked by
     // process so in-app dialogs/menus (same process) still record normally.
     private int _ownPid;
-    private string _lastApp = "";       // last external app/window we recorded in,
-    private string _lastWindow = "";    // reused for notes so they stay in-section
+    private string _lastApp = "";       // last external app we recorded in,
+    private string _lastWindow = "";    // its window title, and
+    private string _lastContext = "";   // its section context (surface/app) — reused so
+                                        // typing/keys/notes stay in the same section
 
     public Recorder(Dispatcher dispatcher, string sessionDir, int maxImageWidth)
     {
@@ -142,7 +144,6 @@ public sealed class Recorder : IDisposable
                         _typedApp = app;
                         _typedField = UiaInspector.FocusedName();
                         _typedIgnore = pid == _ownPid;   // typing inside WriteUp itself
-                        if (!_typedIgnore) { _lastApp = app; _lastWindow = window; }
                     }
                     if (!_typedIgnore) _typed.Append(ev.Payload);
                     break;
@@ -175,8 +176,8 @@ public sealed class Recorder : IDisposable
         int pid = WindowTracker.ProcessIdOf(hwnd);
         if (pid == _ownPid) return;  // ignore keys pressed in WriteUp itself
 
-        _lastApp = app;
-        _lastWindow = window;
+        string ctx = ContextFor(app);
+        Remember(app, window, ctx);
 
         string pretty = name switch
         {
@@ -190,9 +191,23 @@ public sealed class Recorder : IDisposable
             Kind = StepKind.Key,
             Window = window,
             App = app,
-            Context = app,
+            Context = ctx,
+            AutoContext = ctx,
             Caption = $"Press {pretty}."
         });
+    }
+
+    /// <summary>Section context for a non-click step: stay in the last recorded
+    /// surface (e.g. a palette) when still in the same app, else just the app.</summary>
+    private string ContextFor(string app) =>
+        !string.IsNullOrEmpty(_lastContext) && string.Equals(app, _lastApp, StringComparison.OrdinalIgnoreCase)
+            ? _lastContext : app;
+
+    private void Remember(string app, string window, string ctx)
+    {
+        _lastApp = app;
+        _lastWindow = window;
+        _lastContext = ctx;
     }
 
     private void EmitClick(RawEvent ev)
@@ -214,12 +229,16 @@ public sealed class Recorder : IDisposable
             return;
 
         var (window, app) = WindowTracker.DescribeWindow(root);
-        _lastApp = app;
-        _lastWindow = window;
 
         // Ask UI Automation what's under the cursor so we can name the control and
-        // outline it in the screenshot. Best-effort — null on slow/secure windows.
+        // outline it in the screenshot, and find the specific surface (palette /
+        // pane / window) for a descriptive section. Best-effort.
         var el = UiaInspector.Describe(ev.X, ev.Y);
+
+        // Section context: the specific surface when known ("TOOLSPACE palette",
+        // "Pipe Network window"), otherwise the app name.
+        string ctx = !string.IsNullOrWhiteSpace(el?.Surface) ? el!.Surface : app;
+        Remember(app, window, ctx);
 
         string? baseShot = null, zoomShot = null;
         try
@@ -234,7 +253,8 @@ public sealed class Recorder : IDisposable
             Kind = StepKind.Click,
             Window = window,
             App = app,
-            Context = app,
+            Context = ctx,
+            AutoContext = ctx,
             Button = ev.Button.ToString().ToLowerInvariant(),
             X = ev.X,
             Y = ev.Y,
@@ -299,12 +319,14 @@ public sealed class Recorder : IDisposable
         }
         catch { /* ignore */ }
 
+        string ctx = !string.IsNullOrEmpty(_lastContext) ? _lastContext : app;
         Emit(new Step
         {
             Kind = StepKind.Note,
             Window = window,
             App = app,
-            Context = app,
+            Context = ctx,
+            AutoContext = ctx,
             ScreenshotPath = shot,
             Caption = caption
         });
@@ -331,12 +353,15 @@ public sealed class Recorder : IDisposable
 
         string into = field.Length is > 0 and <= 60 ? $" into the \u201c{field}\u201d field" : "";
 
+        string ctx = ContextFor(_typedApp);
+        Remember(_typedApp, _typedWindow, ctx);
         Emit(new Step
         {
             Kind = StepKind.Type,
             Window = _typedWindow,
             App = _typedApp,
-            Context = _typedApp,
+            Context = ctx,
+            AutoContext = ctx,
             Caption = $"Type \u201c{text}\u201d{into}."
         });
     }

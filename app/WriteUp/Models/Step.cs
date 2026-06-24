@@ -19,6 +19,11 @@ public class Step : INotifyPropertyChanged
     public DateTime Timestamp { get; set; } = DateTime.Now;
     public string Window { get; set; } = "";
     public string App { get; set; } = "";
+
+    /// <summary>The originally-detected section context (app or specific surface
+    /// like "TOOLSPACE palette"). Immutable — used to group a contiguous visit so
+    /// editing one step's label can rename the whole visit.</summary>
+    public string AutoContext { get; set; } = "";
     public string Button { get; set; } = "";
     public int X { get; set; }
     public int Y { get; set; }

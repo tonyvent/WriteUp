@@ -18,15 +18,20 @@ public static class UiaInspector
         public string Name = "";
         public string ControlType = "";
         public Rectangle Bounds;   // screen pixels; empty when unknown
+        public string Surface = ""; // descriptive container, e.g. "TOOLSPACE palette"
     }
 
-    private const int TimeoutMs = 700;
+    private const int TimeoutMs = 800;
 
-    /// <summary>Describe the control at screen point (x, y).</summary>
+    /// <summary>Describe the control at screen point (x, y), including the
+    /// descriptive container surface (palette/pane/window) it lives in.</summary>
     public static ElementInfo? Describe(int x, int y) => RunGuarded(() =>
     {
         var el = AutomationElement.FromPoint(new System.Windows.Point(x, y));
-        return el == null ? null : Read(el);
+        if (el == null) return null;
+        var info = Read(el);
+        info.Surface = FindSurface(el) ?? "";
+        return info;
     });
 
     /// <summary>Name of the currently focused control (e.g. the field being typed into).</summary>
@@ -74,6 +79,74 @@ public static class UiaInspector
         if (t == ControlType.Spinner) return "spinner";
         try { return t.ProgrammaticName.Replace("ControlType.", "").ToLowerInvariant(); }
         catch { return ""; }
+    }
+
+    /// <summary>Walk up from the clicked element to find a descriptive container —
+    /// a named palette/pane/window/toolbar — so a step can say "in the TOOLSPACE
+    /// palette" or "in the Pipe Network window" instead of just the app name.
+    /// Returns null when nothing more specific than the main window is found.</summary>
+    private static string? FindSurface(AutomationElement start)
+    {
+        try
+        {
+            var walker = TreeWalker.ControlViewWalker;
+            var node = start;
+            for (int depth = 0; node != null && depth < 16; depth++)
+            {
+                ControlType ct;
+                string name;
+                try { ct = node.Current.ControlType; name = (node.Current.Name ?? "").Trim(); }
+                catch { break; }
+
+                if (IsSurfaceType(ct) && IsMeaningfulName(name))
+                    return Compose(name, ct);
+
+                try { node = walker.GetParent(node); } catch { break; }
+            }
+        }
+        catch { /* ignore */ }
+        return null;
+    }
+
+    private static bool IsSurfaceType(ControlType t) =>
+        t == ControlType.Pane || t == ControlType.Window || t == ControlType.ToolBar;
+
+    private static bool IsMeaningfulName(string name)
+    {
+        if (name.Length < 2 || name.Length > 45) return false;
+        if (name.Contains(" - ")) return false;   // "Document - App" main window title
+
+        // Reject names that look like a file/document (e.g. "Drawing1.dwg").
+        int dot = name.LastIndexOf('.');
+        if (dot > 0 && name.Length - dot - 1 is >= 2 and <= 5)
+        {
+            bool looksExt = true;
+            for (int i = dot + 1; i < name.Length; i++)
+                if (!char.IsLetterOrDigit(name[i])) { looksExt = false; break; }
+            if (looksExt) return false;
+        }
+        return true;
+    }
+
+    private static readonly string[] Nouns =
+    {
+        "window", "palette", "pane", "panel", "dialog", "manager", "editor",
+        "toolbar", "bar", "browser", "inspector", "view", "vista", "vistas"
+    };
+
+    /// <summary>Append a plain noun for the surface type, unless the name is
+    /// already descriptive.</summary>
+    private static string Compose(string name, ControlType t)
+    {
+        string lower = name.ToLowerInvariant();
+        foreach (var n in Nouns)
+            if (lower == n || lower.EndsWith(" " + n)) return name;
+
+        string noun =
+            t == ControlType.Window ? "window" :
+            t == ControlType.Pane ? "palette" :
+            t == ControlType.ToolBar ? "toolbar" : "";
+        return string.IsNullOrEmpty(noun) ? name : name + " " + noun;
     }
 
     private static T? RunGuarded<T>(Func<T?> work) where T : class
