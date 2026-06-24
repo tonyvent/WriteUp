@@ -48,41 +48,51 @@
                     BorderBrush="{StaticResource LineBrush}" BorderThickness="1" Padding="14" Margin="0,0,0,12">
                 <Expander Header="Document details" IsExpanded="True" Foreground="{StaticResource InkBrush}">
                     <Grid Margin="0,12,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="14"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="10"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="10"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <StackPanel Grid.Row="0" Grid.Column="0">
-                            <TextBlock Text="TITLE" Style="{StaticResource FieldLabel}"/>
-                            <TextBox Text="{Binding Meta.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                        </StackPanel>
-                        <StackPanel Grid.Row="0" Grid.Column="2">
-                            <TextBlock Text="SUBTITLE" Style="{StaticResource FieldLabel}"/>
-                            <TextBox Text="{Binding Meta.Subtitle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                        </StackPanel>
+                        <!-- Top row: 2 fields -->
+                        <Grid Grid.Row="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="14"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="TITLE" Style="{StaticResource FieldLabel}"/>
+                                <TextBox Text="{Binding Meta.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="SUBTITLE" Style="{StaticResource FieldLabel}"/>
+                                <TextBox Text="{Binding Meta.Subtitle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                        </Grid>
 
-                        <StackPanel Grid.Row="2" Grid.Column="0">
-                            <TextBlock Text="AUTHOR" Style="{StaticResource FieldLabel}"/>
-                            <TextBox Text="{Binding Meta.Author, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                        </StackPanel>
-                        <StackPanel Grid.Row="2" Grid.Column="2">
-                            <TextBlock Text="DEPARTMENT" Style="{StaticResource FieldLabel}"/>
-                            <TextBox Text="{Binding Meta.Department, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                        </StackPanel>
-
-                        <StackPanel Grid.Row="4" Grid.Column="0">
-                            <TextBlock Text="REVISION" Style="{StaticResource FieldLabel}"/>
-                            <TextBox Text="{Binding Meta.Revision, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                        </StackPanel>
+                        <!-- Bottom row: 3 fields, evenly spaced -->
+                        <Grid Grid.Row="2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="14"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="14"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="AUTHOR" Style="{StaticResource FieldLabel}"/>
+                                <TextBox Text="{Binding Meta.Author, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="DEPARTMENT" Style="{StaticResource FieldLabel}"/>
+                                <TextBox Text="{Binding Meta.Department, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="4">
+                                <TextBlock Text="REVISION" Style="{StaticResource FieldLabel}"/>
+                                <TextBox Text="{Binding Meta.Revision, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                        </Grid>
                     </Grid>
                 </Expander>
             </Border>
