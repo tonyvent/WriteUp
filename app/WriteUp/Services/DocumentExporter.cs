@@ -67,18 +67,8 @@ public static class DocumentExporter
             logo.Height = Unit.FromCentimeter(1.1);
         }
 
-        // Company / department
-        if (!string.IsNullOrWhiteSpace(m.Company))
-        {
-            var cp = sec.AddParagraph();
-            cp.AddFormattedText(m.Company, TextFormat.Bold).Size = 13;
-            if (!string.IsNullOrWhiteSpace(m.Department))
-            {
-                var dp = sec.AddParagraph(m.Department);
-                dp.Format.Font.Size = 9.5;
-                dp.Format.Font.Color = Muted;
-            }
-        }
+        // Branding is the logo only — company/department header text removed
+        // (it duplicated the logo). Department still appears in the meta line.
 
         // Accent rule
         var rule = sec.AddParagraph();

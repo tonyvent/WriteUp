@@ -34,15 +34,8 @@ public static class FlowReport
             ColumnWidth = double.PositiveInfinity
         };
 
-        if (!string.IsNullOrWhiteSpace(m.Company))
-        {
-            doc.Blocks.Add(new Paragraph(new Run(m.Company))
-            { FontWeight = FontWeights.Bold, FontSize = 18, Margin = new Thickness(0) });
-            if (!string.IsNullOrWhiteSpace(m.Department))
-                doc.Blocks.Add(new Paragraph(new Run(m.Department))
-                { Foreground = Muted, FontSize = 12, Margin = new Thickness(0, 0, 0, 6) });
-        }
-
+        // Branding is the logo only — the company/department text lived here but
+        // duplicated the logo, so it's gone. Department still shows in the meta row.
         var logo = LoadImage(Branding.LogoPath, 260);
         if (logo != null)
         {

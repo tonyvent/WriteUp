@@ -83,20 +83,12 @@ public static class ReportWriter
         sb.Append("<title>").Append(Enc(TitleOf(m))).Append("</title><style>")
           .Append(Css).Append("</style></head><body><div class='wrap'>");
 
+        // Branding is the logo only (the company/department text duplicated it).
         string? logo = EmbedImage(Branding.LogoPath);
-        if (!string.IsNullOrWhiteSpace(m.Company) || logo != null)
+        if (logo != null)
         {
-            sb.Append("<div class='brandbar'>");
-            if (!string.IsNullOrWhiteSpace(m.Company))
-            {
-                sb.Append("<div class='co'>").Append(Enc(m.Company.Trim()));
-                if (!string.IsNullOrWhiteSpace(m.Department))
-                    sb.Append("<small>").Append(Enc(m.Department.Trim())).Append("</small>");
-                sb.Append("</div>");
-            }
-            else sb.Append("<div></div>");
-            if (logo != null)
-                sb.Append("<img class='logo' src='").Append(logo).Append("' alt='logo'>");
+            sb.Append("<div class='brandbar'><div></div>");
+            sb.Append("<img class='logo' src='").Append(logo).Append("' alt='logo'>");
             sb.Append("</div>");
         }
 
