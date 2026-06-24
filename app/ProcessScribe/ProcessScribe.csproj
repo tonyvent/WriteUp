@@ -18,6 +18,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- UseWindowsForms injects global `using System.Drawing;` and
+         `using System.Windows.Forms;`. In a WPF app those collide with WPF /
+         MigraDoc types (Application, Color, Brush, Image, FontFamily,
+         HorizontalAlignment, MessageBox...). Only ScreenCapturer.cs needs the
+         desktop drawing types, and it imports them explicitly, so drop the
+         implicit globals to keep every other file unambiguous. -->
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Native PDF + RTF(Word) export. MIT-licensed; the WPF build uses system
          fonts and WPF imaging, so no font resolver setup is needed. -->
     <PackageReference Include="PDFsharp-MigraDoc-WPF" Version="6.2.4" />
