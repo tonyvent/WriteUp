@@ -43,7 +43,7 @@ public static class FlowReport
                 { Foreground = Muted, FontSize = 12, Margin = new Thickness(0, 0, 0, 6) });
         }
 
-        var logo = LoadImage(m.LogoPath, 260);
+        var logo = LoadImage(Branding.LogoPath, 260);
         if (logo != null)
         {
             var img = new Image { Source = logo, Stretch = Stretch.Uniform, Height = 42,

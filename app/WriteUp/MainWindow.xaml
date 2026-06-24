@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="WriteUp" Height="780" Width="1180"
         MinHeight="600" MinWidth="900"
+        Icon="Assets/logo.ico"
         Topmost="{Binding AlwaysOnTop}"
         Background="{StaticResource BgBrush}"
         WindowStartupLocation="CenterScreen"
@@ -74,38 +75,13 @@
                             <TextBox Text="{Binding Meta.Author, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                         </StackPanel>
                         <StackPanel Grid.Row="2" Grid.Column="2">
-                            <TextBlock Text="COMPANY" Style="{StaticResource FieldLabel}"/>
-                            <TextBox Text="{Binding Meta.Company, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                            <TextBlock Text="DEPARTMENT" Style="{StaticResource FieldLabel}"/>
+                            <TextBox Text="{Binding Meta.Department, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                         </StackPanel>
 
-                        <Grid Grid.Row="4" Grid.Column="0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="10"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Text="DEPARTMENT" Style="{StaticResource FieldLabel}"/>
-                                <TextBox Text="{Binding Meta.Department, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Text="REVISION" Style="{StaticResource FieldLabel}"/>
-                                <TextBox Text="{Binding Meta.Revision, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                            </StackPanel>
-                        </Grid>
-                        <StackPanel Grid.Row="4" Grid.Column="2">
-                            <TextBlock Text="LOGO" Style="{StaticResource FieldLabel}"/>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="8"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBox Grid.Column="0" IsReadOnly="True"
-                                         Text="{Binding Meta.LogoPath, Mode=OneWay}"/>
-                                <Button Grid.Column="2" Content="Browse…" Style="{StaticResource GhostButton}"
-                                        Padding="12,6" Click="BrowseLogo_Click"/>
-                            </Grid>
+                        <StackPanel Grid.Row="4" Grid.Column="0">
+                            <TextBlock Text="REVISION" Style="{StaticResource FieldLabel}"/>
+                            <TextBox Text="{Binding Meta.Revision, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                         </StackPanel>
                     </Grid>
                 </Expander>
@@ -227,17 +203,10 @@
                 </Grid>
             </Border>
 
-            <!-- Left footer: hotkey + output -->
+            <!-- Left footer: hotkey -->
             <StackPanel Grid.Row="4" Margin="2,12,0,0">
                 <TextBlock Foreground="{StaticResource MutedBrush}" FontSize="12"
                            Text="Global hotkey: Ctrl+Alt+R to start/stop"/>
-                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                    <TextBlock Foreground="{StaticResource MutedBrush}" FontSize="12" Text="Output: "/>
-                    <TextBlock Foreground="{StaticResource MutedBrush}" FontSize="12"
-                               Text="{Binding OutputDir}" TextTrimming="CharacterEllipsis" MaxWidth="300"/>
-                    <Button Content="Change…" Style="{StaticResource GhostButton}" Padding="8,2"
-                            Margin="8,0,0,0" FontSize="11" Click="ChangeOutput_Click"/>
-                </StackPanel>
             </StackPanel>
         </Grid>
 
@@ -281,11 +250,7 @@
 
                 <!-- Export bar -->
                 <Grid Grid.Row="2" Margin="2,12,2,0">
-                    <Button Content="Open folder" Style="{StaticResource GhostButton}"
-                            HorizontalAlignment="Left" Click="OpenFolder_Click"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button Content="Markdown" Style="{StaticResource GhostButton}" Margin="0,0,8,0"
-                                Click="ExportMarkdown_Click" IsEnabled="{Binding HasSteps}"/>
                         <Button Content="HTML" Style="{StaticResource GhostButton}" Margin="0,0,8,0"
                                 Click="ExportHtml_Click" IsEnabled="{Binding HasSteps}"/>
                         <Button Content="Word (.rtf)" Style="{StaticResource GhostButton}" Margin="0,0,8,0"

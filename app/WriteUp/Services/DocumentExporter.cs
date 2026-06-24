@@ -57,11 +57,12 @@ public static class DocumentExporter
         footer.AddPageField();
 
         // Logo, right aligned
-        if (!string.IsNullOrWhiteSpace(m.LogoPath) && File.Exists(m.LogoPath))
+        string logoPath = Branding.LogoPath;
+        if (!string.IsNullOrWhiteSpace(logoPath) && File.Exists(logoPath))
         {
             var lp = sec.AddParagraph();
             lp.Format.Alignment = ParagraphAlignment.Right;
-            var logo = lp.AddImage(m.LogoPath);
+            var logo = lp.AddImage(logoPath);
             logo.LockAspectRatio = true;
             logo.Height = Unit.FromCentimeter(1.1);
         }

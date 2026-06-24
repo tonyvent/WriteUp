@@ -122,12 +122,8 @@ public partial class MainWindow : Window
     private void ApplySettingsToUi()
     {
         _vm.Meta.Author = _settings.DefaultAuthor;
-        // Company is always Dynamic Engineering unless the user has deliberately
-        // saved a different one.
-        _vm.Meta.Company = string.IsNullOrWhiteSpace(_settings.DefaultCompany)
-            ? "Dynamic Engineering" : _settings.DefaultCompany;
+        _vm.Meta.Company = Branding.Company;   // fixed branding (logo is bundled)
         _vm.Meta.Department = _settings.DefaultDepartment;
-        _vm.Meta.LogoPath = _settings.DefaultLogoPath;
         _vm.AlwaysOnTop = _settings.AlwaysOnTop;
         _vm.OutputDir = string.IsNullOrWhiteSpace(_settings.OutputDir)
             ? SettingsStore.DefaultSessionsDir
@@ -222,34 +218,11 @@ public partial class MainWindow : Window
             _vm.Steps.Remove(step);
     }
 
-    // ---- metadata / settings ------------------------------------------------
-    private void BrowseLogo_Click(object sender, RoutedEventArgs e)
-    {
-        var dlg = new OpenFileDialog
-        {
-            Title = "Choose a logo image",
-            Filter = "Images|*.png;*.jpg;*.jpeg;*.gif;*.bmp|All files|*.*"
-        };
-        if (dlg.ShowDialog(this) == true)
-            _vm.Meta.LogoPath = dlg.FileName;
-    }
-
-    private void ChangeOutput_Click(object sender, RoutedEventArgs e)
-    {
-        var dlg = new OpenFolderDialog { Title = "Choose where sessions are saved" };
-        if (dlg.ShowDialog(this) == true)
-        {
-            _vm.OutputDir = dlg.FolderName;
-            PersistSettings();
-        }
-    }
-
+    // ---- settings -----------------------------------------------------------
     private void PersistSettings()
     {
         _settings.DefaultAuthor = _vm.Meta.Author;
-        _settings.DefaultCompany = _vm.Meta.Company;
         _settings.DefaultDepartment = _vm.Meta.Department;
-        _settings.DefaultLogoPath = _vm.Meta.LogoPath;
         _settings.AlwaysOnTop = _vm.AlwaysOnTop;
         _settings.OutputDir = _vm.OutputDir;
         SettingsStore.Save(_settings);
@@ -346,67 +319,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ExportMarkdown_Click(object sender, RoutedEventArgs e)
-    {
-        string? path = AskSavePath("Save Markdown as", "Markdown (*.md)|*.md", "md");
-        if (path == null) return;
-        try
-        {
-            File.WriteAllText(path, ReportWriter.Markdown(_vm.Meta, _vm.Steps.ToList()));
-            // Markdown references images relatively, so copy them next to the file.
-            CopyScreenshotsBeside(path);
-            RememberExportDir(path);
-            OpenFolder(Path.GetDirectoryName(path)!);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "Export failed",
-                MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    /// <summary>Copies the referenced screenshots into a ./screenshots folder
-    /// beside the saved Markdown so its relative image links resolve anywhere.</summary>
-    private void CopyScreenshotsBeside(string mdPath)
-    {
-        string dir = Path.GetDirectoryName(mdPath)!;
-        string shots = Path.Combine(dir, "screenshots");
-        foreach (var s in _vm.Steps)
-        {
-            if (!s.HasScreenshot || !File.Exists(s.ScreenshotPath!)) continue;
-            string dest = Path.Combine(shots, Path.GetFileName(s.ScreenshotPath!));
-            if (string.Equals(Path.GetFullPath(s.ScreenshotPath!), Path.GetFullPath(dest),
-                    StringComparison.OrdinalIgnoreCase))
-                continue; // already in place (saved into the session folder)
-            try
-            {
-                Directory.CreateDirectory(shots);
-                File.Copy(s.ScreenshotPath!, dest, overwrite: true);
-            }
-            catch { /* skip a problem image, keep going */ }
-        }
-    }
-
-    private void OpenFolder_Click(object sender, RoutedEventArgs e)
-    {
-        string dir = FirstExistingDir(_settings.LastExportDir, _sessionDir, _vm.OutputDir,
-            SettingsStore.DefaultSessionsDir);
-        OpenFolder(dir);
-    }
-
     private static void OpenFile(string path)
     {
         try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
-        catch { /* ignore */ }
-    }
-
-    private static void OpenFolder(string dir)
-    {
-        try
-        {
-            if (Directory.Exists(dir))
-                Process.Start(new ProcessStartInfo(dir) { UseShellExecute = true });
-        }
         catch { /* ignore */ }
     }
 

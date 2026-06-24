@@ -83,7 +83,7 @@ public static class ReportWriter
         sb.Append("<title>").Append(Enc(TitleOf(m))).Append("</title><style>")
           .Append(Css).Append("</style></head><body><div class='wrap'>");
 
-        string? logo = EmbedImage(m.LogoPath);
+        string? logo = EmbedImage(Branding.LogoPath);
         if (!string.IsNullOrWhiteSpace(m.Company) || logo != null)
         {
             sb.Append("<div class='brandbar'>");
