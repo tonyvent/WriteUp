@@ -5,10 +5,10 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using Microsoft.Win32;
-using ProcessScribe.Models;
-using ProcessScribe.Services;
+using WriteUp.Models;
+using WriteUp.Services;
 
-namespace ProcessScribe;
+namespace WriteUp;
 
 public partial class MainWindow : Window
 {
@@ -32,6 +32,10 @@ public partial class MainWindow : Window
         _settings = SettingsStore.Load();
         ApplySettingsToUi();
         DataContext = _vm;
+
+        // Sweep up any session folders a previous run/crash left behind.
+        SessionCleanup.PurgeOrphans(_vm.OutputDir);
+        SessionCleanup.PurgeOrphans(SettingsStore.DefaultSessionsDir);
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += (_, _) =>
@@ -88,7 +92,10 @@ public partial class MainWindow : Window
     private void ApplySettingsToUi()
     {
         _vm.Meta.Author = _settings.DefaultAuthor;
-        _vm.Meta.Company = _settings.DefaultCompany;
+        // Company is always Dynamic Engineering unless the user has deliberately
+        // saved a different one.
+        _vm.Meta.Company = string.IsNullOrWhiteSpace(_settings.DefaultCompany)
+            ? "Dynamic Engineering" : _settings.DefaultCompany;
         _vm.Meta.Department = _settings.DefaultDepartment;
         _vm.Meta.LogoPath = _settings.DefaultLogoPath;
         _vm.AlwaysOnTop = _settings.AlwaysOnTop;
@@ -149,7 +156,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             MessageBox.Show(this, "Could not start recording:\n" + ex.Message,
-                "ProcessScribe", MessageBoxButton.OK, MessageBoxImage.Error);
+                "WriteUp", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -386,6 +393,11 @@ public partial class MainWindow : Window
             }
             _recorder?.Dispose();
             PersistSettings();
+
+            // Don't let capture scratch space pile up on disk.
+            if (_settings.CleanupSessionsOnExit)
+                SessionCleanup.Delete(_sessionDir);
+            SessionCleanup.PurgeOrphans(_vm.OutputDir, keep: _settings.CleanupSessionsOnExit ? null : _sessionDir);
         }
         catch { /* ignore */ }
         base.OnClosed(e);

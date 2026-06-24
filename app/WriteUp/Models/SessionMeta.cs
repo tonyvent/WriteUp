@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace ProcessScribe.Models;
+namespace WriteUp.Models;
 
 /// <summary>Document front-matter: the title block and branding.</summary>
 public class SessionMeta : INotifyPropertyChanged
@@ -9,7 +9,7 @@ public class SessionMeta : INotifyPropertyChanged
     private string _title = "";
     private string _subtitle = "";
     private string _author = "";
-    private string _company = "";
+    private string _company = "Dynamic Engineering";
     private string _department = "";
     private string _revision = "";
     private string _date = "";

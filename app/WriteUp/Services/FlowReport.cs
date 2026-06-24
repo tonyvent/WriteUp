@@ -5,9 +5,9 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using ProcessScribe.Models;
+using WriteUp.Models;
 
-namespace ProcessScribe.Services;
+namespace WriteUp.Services;
 
 /// <summary>Builds a WPF <see cref="FlowDocument"/> that mirrors the exported
 /// report, for the live in-app preview pane.</summary>

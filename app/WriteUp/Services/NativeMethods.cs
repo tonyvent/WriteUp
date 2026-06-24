@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace ProcessScribe.Services;
+namespace WriteUp.Services;
 
 /// <summary>All Win32 interop in one place.</summary>
 internal static class NativeMethods
@@ -99,6 +99,10 @@ internal static class NativeMethods
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetCursorPos(out POINT lpPoint);
 
     // ---- Keyboard translation ----------------------------------------------
     [DllImport("user32.dll")]

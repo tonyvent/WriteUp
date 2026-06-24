@@ -10,11 +10,11 @@
          assemblies so the app needs no NuGet packages at all. -->
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <AssemblyName>ProcessScribe</AssemblyName>
-    <RootNamespace>ProcessScribe</RootNamespace>
+    <AssemblyName>WriteUp</AssemblyName>
+    <RootNamespace>WriteUp</RootNamespace>
     <Version>0.2.0</Version>
-    <Authors>ProcessScribe contributors</Authors>
-    <Product>ProcessScribe</Product>
+    <Authors>WriteUp contributors</Authors>
+    <Product>WriteUp</Product>
   </PropertyGroup>
 
   <ItemGroup>

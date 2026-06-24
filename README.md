@@ -1,11 +1,11 @@
-# ProcessScribe
+# WriteUp
 
 Record what you do in **any** application — CAD, a browser, a terminal,
 anything — and automatically get a clean, step-by-step write-up with
 annotated screenshots.
 
 It works like a souped-up version of Windows' old *Steps Recorder*: as you
-work, ProcessScribe quietly captures your clicks, the text you type, and the
+work, WriteUp quietly captures your clicks, the text you type, and the
 app you're in, marking each screenshot where you clicked. When you stop, it
 turns that trail into a Markdown / HTML / Word document you can hand to a
 teammate as a tutorial or standard operating procedure.
@@ -13,10 +13,10 @@ teammate as a tutorial or standard operating procedure.
 Built for people who do complicated multi-step processes (Fusion, AutoCAD,
 Inventor, Revit, SolidWorks, etc.) and are tired of writing the docs by hand.
 
-> **Two ways to use ProcessScribe**
+> **Two ways to use WriteUp**
 > - **Windows desktop app (recommended)** — a real point-and-click app with a
 >   Start/Stop button, live editable steps, and one-click export. Open
->   [`app/ProcessScribe.sln`](app/) in Visual Studio 2022, or see
+>   [`app/WriteUp.sln`](app/) in Visual Studio 2022, or see
 >   [`app/README.md`](app/README.md). Built in C# / .NET 8 WPF with no NuGet
 >   dependencies, and easy to publish as a single shareable `.exe`.
 > - **Python command-line tool** — the original cross-platform CLI, documented
@@ -181,7 +181,7 @@ directory. Nothing is uploaded anywhere.
 
 ## Privacy
 
-ProcessScribe records your **screen and keystrokes** while active. It captures
+WriteUp records your **screen and keystrokes** while active. It captures
 *everything* you type during a session — including anything sensitive — so:
 
 - Only record while doing the specific process you want documented.

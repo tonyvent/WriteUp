@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace ProcessScribe.Services;
+namespace WriteUp.Services;
 
 public enum ClickButton { Left, Right, Middle }
 

@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 
-namespace ProcessScribe.Services;
+namespace WriteUp.Services;
 
 /// <summary>Resolves the currently focused window's title and a friendly app name.</summary>
 public static class WindowTracker

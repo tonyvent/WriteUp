@@ -3,9 +3,9 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Threading;
-using ProcessScribe.Models;
+using WriteUp.Models;
 
-namespace ProcessScribe.Services;
+namespace WriteUp.Services;
 
 /// <summary>
 /// Turns raw input events into ordered <see cref="Step"/>s. Hook callbacks
@@ -40,6 +40,7 @@ public sealed class Recorder : IDisposable
     private bool _typing;
     private string _typedApp = "";
     private string _typedWindow = "";
+    private string _typedField = "";   // focused control name when typing began
 
     public Recorder(Dispatcher dispatcher, string sessionDir, int maxImageWidth)
     {
@@ -122,6 +123,7 @@ public sealed class Recorder : IDisposable
                     {
                         _typing = true;
                         (_typedWindow, _typedApp) = WindowTracker.GetActive();
+                        _typedField = UiaInspector.FocusedName();
                     }
                     _typed.Append(ev.Payload);
                     break;
@@ -170,20 +172,18 @@ public sealed class Recorder : IDisposable
     private void EmitClick(RawEvent ev)
     {
         var (window, app) = WindowTracker.GetActive();
+
+        // Ask UI Automation what's under the cursor so we can name the control and
+        // outline it in the screenshot. Best-effort — null on slow/secure windows.
+        var el = UiaInspector.Describe(ev.X, ev.Y);
+
         string? shot = null;
         try
         {
-            shot = ScreenCapturer.Capture(_shotsDir, ev.X, ev.Y, mark: true, _maxImageWidth);
+            shot = ScreenCapturer.CaptureClick(_shotsDir, ev.X, ev.Y,
+                el?.Bounds ?? System.Drawing.Rectangle.Empty, _maxImageWidth);
         }
         catch { /* keep the step even if capture fails */ }
-
-        string appName = string.IsNullOrWhiteSpace(app) ? "the application" : app;
-        string caption = ev.Button switch
-        {
-            ClickButton.Right => $"Right-click at the highlighted location in {appName}.",
-            ClickButton.Middle => $"Middle-click at the highlighted location in {appName}.",
-            _ => $"Click at the highlighted location in {appName}."
-        };
 
         Emit(new Step
         {
@@ -194,8 +194,50 @@ public sealed class Recorder : IDisposable
             X = ev.X,
             Y = ev.Y,
             ScreenshotPath = shot,
-            Caption = caption
+            Caption = ClickCaption(ev.Button, app, el)
         });
+    }
+
+    /// <summary>Turn the clicked control (when UI Automation found one) into a
+    /// readable instruction; otherwise fall back to a location-based caption.</summary>
+    private static string ClickCaption(ClickButton button, string app, UiaInspector.ElementInfo? el)
+    {
+        string verb = button switch
+        {
+            ClickButton.Right => "Right-click",
+            ClickButton.Middle => "Middle-click",
+            _ => "Click"
+        };
+        string appPart = string.IsNullOrWhiteSpace(app) ? "" : $" in {app}";
+
+        string name = el?.Name?.Trim() ?? "";
+        string type = el?.ControlType ?? "";
+
+        if (name.Length is > 0 and <= 60)
+        {
+            return type switch
+            {
+                "menu item" => button == ClickButton.Left
+                    ? $"Select “{name}” from the menu{appPart}."
+                    : $"{verb} the “{name}” menu item{appPart}.",
+                "tab"      => $"Switch to the “{name}” tab{appPart}.",
+                "field"    => $"{verb} the “{name}” field{appPart}.",
+                "link"     => $"{verb} the “{name}” link{appPart}.",
+                "checkbox" => $"{verb} the “{name}” checkbox{appPart}.",
+                "option"   => $"{verb} the “{name}” option{appPart}.",
+                "dropdown" => $"{verb} the “{name}” dropdown{appPart}.",
+                "button"   => $"{verb} the “{name}” button{appPart}.",
+                "" or "label" => $"{verb} “{name}”{appPart}.",
+                _          => $"{verb} the “{name}” {type}{appPart}."
+            };
+        }
+
+        // No usable name — still mention the kind of control if we know it.
+        if (type.Length > 0 && type != "field" && type != "label")
+            return $"{verb} the highlighted {type}{appPart}.";
+
+        string appName = string.IsNullOrWhiteSpace(app) ? "the application" : app;
+        return $"{verb} at the highlighted location in {appName}.";
     }
 
     private void EmitNote(string caption)
@@ -204,7 +246,7 @@ public sealed class Recorder : IDisposable
         string? shot = null;
         try
         {
-            shot = ScreenCapturer.Capture(_shotsDir, 0, 0, mark: false, _maxImageWidth);
+            shot = ScreenCapturer.CaptureContext(_shotsDir, _maxImageWidth);
         }
         catch { /* ignore */ }
 
@@ -224,20 +266,25 @@ public sealed class Recorder : IDisposable
         {
             _typing = false;
             _typed.Clear();
+            _typedField = "";
             return;
         }
         string text = _typed.ToString();
+        string field = _typedField;
         _typed.Clear();
         _typing = false;
+        _typedField = "";
 
         if (string.IsNullOrWhiteSpace(text)) return;
+
+        string into = field.Length is > 0 and <= 60 ? $" into the \u201c{field}\u201d field" : "";
 
         Emit(new Step
         {
             Kind = StepKind.Type,
             Window = _typedWindow,
             App = _typedApp,
-            Caption = $"Type \u201c{text}\u201d."
+            Caption = $"Type \u201c{text}\u201d{into}."
         });
     }
 

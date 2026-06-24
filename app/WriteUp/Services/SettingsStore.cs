@@ -1,10 +1,10 @@
 using System.IO;
 using System.Text.Json;
-using ProcessScribe.Models;
+using WriteUp.Models;
 
-namespace ProcessScribe.Services;
+namespace WriteUp.Services;
 
-/// <summary>Loads/saves <see cref="AppSettings"/> under %AppData%\ProcessScribe.</summary>
+/// <summary>Loads/saves <see cref="AppSettings"/> under %AppData%\WriteUp.</summary>
 public static class SettingsStore
 {
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
@@ -15,7 +15,7 @@ public static class SettingsStore
         {
             string dir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "ProcessScribe");
+                "WriteUp");
             Directory.CreateDirectory(dir);
             return dir;
         }

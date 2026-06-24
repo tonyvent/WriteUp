@@ -1,9 +1,9 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using ProcessScribe.Models;
+using WriteUp.Models;
 
-namespace ProcessScribe;
+namespace WriteUp;
 
 public sealed class MainViewModel : INotifyPropertyChanged
 {

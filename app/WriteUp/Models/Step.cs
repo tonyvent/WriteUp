@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace ProcessScribe.Models;
+namespace WriteUp.Models;
 
 public enum StepKind
 {
