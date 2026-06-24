@@ -34,4 +34,13 @@
     <PackageReference Include="PDFsharp-MigraDoc-WPF" Version="6.2.4" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Dynamic-Logo.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="lOGO.ico.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
