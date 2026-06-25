@@ -54,6 +54,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
         set { if (_autoPreview != value) { _autoPreview = value; OnPropertyChanged(); } }
     }
 
+    private bool _compactWhileRecording;
+    public bool CompactWhileRecording
+    {
+        get => _compactWhileRecording;
+        set { if (_compactWhileRecording != value) { _compactWhileRecording = value; OnPropertyChanged(); } }
+    }
+
     private string _outputDir = "";
     public string OutputDir
     {

@@ -38,9 +38,13 @@
                     <TextBlock Text="Record what you do, get a write-up." FontSize="13"
                                Foreground="{StaticResource MutedBrush}"/>
                 </StackPanel>
-                <CheckBox Content="Always on top" IsChecked="{Binding AlwaysOnTop, Mode=TwoWay}"
-                          HorizontalAlignment="Right" VerticalAlignment="Top"
-                          Foreground="{StaticResource MutedBrush}"/>
+                <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top">
+                    <CheckBox Content="Always on top" IsChecked="{Binding AlwaysOnTop, Mode=TwoWay}"
+                              HorizontalAlignment="Right" Foreground="{StaticResource MutedBrush}"/>
+                    <CheckBox Content="Compact while recording" IsChecked="{Binding CompactWhileRecording, Mode=TwoWay}"
+                              HorizontalAlignment="Right" Margin="0,6,0,0" Foreground="{StaticResource MutedBrush}"
+                              ToolTip="Hide this window while recording and show a small movable Stop bar at the top of the screen."/>
+                </StackPanel>
             </Grid>
 
             <!-- Document details -->

@@ -26,6 +26,7 @@ public partial class MainWindow : Window
     private string? _sessionDir;
     private DateTime _startTime;
     private HwndSource? _source;
+    private CompactBar? _compact;
 
     public MainWindow()
     {
@@ -157,6 +158,7 @@ public partial class MainWindow : Window
         _vm.Meta.Company = Branding.Company;   // fixed branding (logo is bundled)
         _vm.Meta.Department = _settings.DefaultDepartment;
         _vm.AlwaysOnTop = _settings.AlwaysOnTop;
+        _vm.CompactWhileRecording = _settings.CompactWhileRecording;
         _vm.OutputDir = string.IsNullOrWhiteSpace(_settings.OutputDir)
             ? SettingsStore.DefaultSessionsDir
             : _settings.OutputDir;
@@ -210,6 +212,9 @@ public partial class MainWindow : Window
             _vm.Elapsed = "00:00";
             _vm.IsRecording = true;
             _timer.Start();
+
+            if (_vm.CompactWhileRecording)
+                EnterCompactMode();
         }
         catch (Exception ex)
         {
@@ -220,6 +225,7 @@ public partial class MainWindow : Window
 
     private void StopRecording()
     {
+        ExitCompactMode();
         _timer.Stop();
         if (_recorder != null)
         {
@@ -231,6 +237,47 @@ public partial class MainWindow : Window
         _vm.IsRecording = false;
         PersistSettings();
         RefreshPreview();
+    }
+
+    // ---- compact (minimized) recording bar ----------------------------------
+    private void EnterCompactMode()
+    {
+        var bar = new CompactBar { DataContext = _vm };
+        bar.StopClicked += () => ToggleRecording();
+        bar.NoteClicked += () => _recorder?.AddNote("");
+        bar.Closed += CompactBar_Closed;
+        _compact = bar;
+        bar.Show();
+        Hide();   // tuck the main window away; the bar drives recording
+    }
+
+    private void CompactBar_Closed(object? sender, EventArgs e)
+    {
+        // Bar closed without us tearing it down (e.g. Alt+F4) — stop and restore.
+        if (_compact == null) return;
+        _compact = null;
+        if (_vm.IsRecording) StopRecording();
+        else RestoreFromCompact();
+    }
+
+    private void ExitCompactMode()
+    {
+        var bar = _compact;
+        _compact = null;
+        if (bar != null)
+        {
+            bar.Closed -= CompactBar_Closed;
+            bar.Close();
+        }
+        RestoreFromCompact();
+    }
+
+    private void RestoreFromCompact()
+    {
+        if (IsVisible) return;
+        Show();
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Activate();
     }
 
     private void OnStepAdded(Step step)
@@ -256,6 +303,7 @@ public partial class MainWindow : Window
         _settings.DefaultAuthor = _vm.Meta.Author;
         _settings.DefaultDepartment = _vm.Meta.Department;
         _settings.AlwaysOnTop = _vm.AlwaysOnTop;
+        _settings.CompactWhileRecording = _vm.CompactWhileRecording;
         _settings.OutputDir = _vm.OutputDir;
         SettingsStore.Save(_settings);
     }
@@ -362,6 +410,12 @@ public partial class MainWindow : Window
     {
         try
         {
+            if (_compact != null)
+            {
+                _compact.Closed -= CompactBar_Closed;
+                _compact.Close();
+                _compact = null;
+            }
             if (_source != null)
             {
                 var helper = new WindowInteropHelper(this);
