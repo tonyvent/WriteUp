@@ -78,7 +78,7 @@ public static class FlowReport
             }
 
             n++;
-            var sp = new Paragraph { Margin = new Thickness(0, 6, 0, 0) };
+            var sp = new Paragraph { Margin = new Thickness(0, 6, 0, 0), Tag = s };  // Tag links back to the step
             sp.Inlines.Add(new Run(n + ".  ") { FontWeight = FontWeights.Bold });
             sp.Inlines.Add(new Run(s.Caption));
             doc.Blocks.Add(sp);

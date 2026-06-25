@@ -149,7 +149,10 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Border Background="White" CornerRadius="10" Margin="2,4"
-                                            BorderBrush="{StaticResource LineBrush}" BorderThickness="1" Padding="10">
+                                            BorderBrush="{StaticResource LineBrush}" BorderThickness="1" Padding="10"
+                                            Cursor="Hand"
+                                            MouseLeftButtonUp="StepCard_Click"
+                                            ToolTip="Click to jump to this step in the preview">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto"/>

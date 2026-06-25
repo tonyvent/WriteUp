@@ -9,7 +9,8 @@ public enum StepKind
     Type,
     Key,
     Note,
-    Scroll
+    Scroll,
+    Pan
 }
 
 /// <summary>A single recorded action shown in the list and the report.</summary>
@@ -98,6 +99,7 @@ public class Step : INotifyPropertyChanged
         StepKind.Key => "Key",
         StepKind.Note => "Note",
         StepKind.Scroll => "Scroll",
+        StepKind.Pan => "Pan",
         _ => Kind.ToString()
     };
 

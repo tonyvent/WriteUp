@@ -12,7 +12,9 @@ public enum ClickButton { Left, Right, Middle }
 /// </summary>
 public sealed class InputHook : IDisposable
 {
-    public event Action<int, int, ClickButton>? MouseClicked;
+    public event Action<int, int, ClickButton>? MouseDown;   // button pressed
+    public event Action<int, int, ClickButton>? MouseUp;     // button released
+    public event Action<int, int, int>? MouseWheel;          // x, y, wheel delta (+up / -down)
     public event Action<string>? TextTyped;     // a single character
     public event Action<string>? SpecialKey;    // "enter" | "tab" | "esc" | "backspace"
 
@@ -67,19 +69,22 @@ public sealed class InputHook : IDisposable
         if (nCode == NativeMethods.HC_ACTION)
         {
             int msg = (int)wParam;
-            ClickButton? button = msg switch
+            var data = Marshal.PtrToStructure<NativeMethods.MSLLHOOKSTRUCT>(lParam);
+            try
             {
-                NativeMethods.WM_LBUTTONDOWN => ClickButton.Left,
-                NativeMethods.WM_RBUTTONDOWN => ClickButton.Right,
-                NativeMethods.WM_MBUTTONDOWN => ClickButton.Middle,
-                _ => null
-            };
-            if (button is { } b)
-            {
-                var data = Marshal.PtrToStructure<NativeMethods.MSLLHOOKSTRUCT>(lParam);
-                try { MouseClicked?.Invoke(data.pt.x, data.pt.y, b); }
-                catch { /* never let an exception escape into the hook chain */ }
+                switch (msg)
+                {
+                    case NativeMethods.WM_LBUTTONDOWN: MouseDown?.Invoke(data.pt.x, data.pt.y, ClickButton.Left); break;
+                    case NativeMethods.WM_RBUTTONDOWN: MouseDown?.Invoke(data.pt.x, data.pt.y, ClickButton.Right); break;
+                    case NativeMethods.WM_MBUTTONDOWN: MouseDown?.Invoke(data.pt.x, data.pt.y, ClickButton.Middle); break;
+                    case NativeMethods.WM_MBUTTONUP: MouseUp?.Invoke(data.pt.x, data.pt.y, ClickButton.Middle); break;
+                    case NativeMethods.WM_MOUSEWHEEL:
+                        int delta = (short)(data.mouseData >> 16);   // HIWORD = signed wheel delta
+                        MouseWheel?.Invoke(data.pt.x, data.pt.y, delta);
+                        break;
+                }
             }
+            catch { /* never let an exception escape into the hook chain */ }
         }
         return NativeMethods.CallNextHookEx(IntPtr.Zero, nCode, wParam, lParam);
     }

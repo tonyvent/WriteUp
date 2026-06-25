@@ -16,7 +16,7 @@ namespace WriteUp.Services;
 /// </summary>
 public sealed class Recorder : IDisposable
 {
-    private enum RawKind { Click, Text, Special, Note, Flush }
+    private enum RawKind { Click, MidUp, Wheel, Text, Special, Note, Flush }
 
     private sealed class RawEvent
     {
@@ -24,7 +24,8 @@ public sealed class Recorder : IDisposable
         public int X;
         public int Y;
         public ClickButton Button;
-        public int ForegroundPid;   // active app at the instant of the click
+        public int ForegroundPid;   // active app at the instant of the event
+        public int Delta;           // wheel rotation (+up / -down)
         public string Payload = ""; // typed char, special-key name, or note caption
     }
 
@@ -54,6 +55,21 @@ public sealed class Recorder : IDisposable
     private string _lastContext = "";   // its section context (surface/app) — reused so
                                         // typing/keys/notes stay in the same section
 
+    // Double-click detection (worker thread only).
+    private uint _dblClickMs = 500;
+    private Step? _lastClickStep;
+    private ClickButton _lastClickButton;
+    private int _lastClickTick;
+    private int _lastClickX, _lastClickY;
+
+    // Middle button is deferred to its release so we can tell a pan (drag) from a click.
+    private RawEvent? _midDown;
+    private const int PanThreshold = 8; // px of movement that counts as a pan
+
+    // Mouse-wheel accumulation, so a burst of scrolling becomes one step.
+    private bool _wheelActive;
+    private int _wheelDelta, _wheelX, _wheelY, _wheelFgPid;
+
     public Recorder(Dispatcher dispatcher, string sessionDir, int maxImageWidth)
     {
         _dispatcher = dispatcher;
@@ -65,7 +81,10 @@ public sealed class Recorder : IDisposable
     public void Start()
     {
         _ownPid = Environment.ProcessId;
-        _hook.MouseClicked += OnMouseClicked;
+        try { _dblClickMs = NativeMethods.GetDoubleClickTime(); } catch { /* keep default */ }
+        _hook.MouseDown += OnMouseDown;
+        _hook.MouseUp += OnMouseUp;
+        _hook.MouseWheel += OnMouseWheel;
         _hook.TextTyped += OnTextTyped;
         _hook.SpecialKey += OnSpecialKey;
         _worker = Task.Factory.StartNew(Consume, TaskCreationOptions.LongRunning);
@@ -75,7 +94,9 @@ public sealed class Recorder : IDisposable
     public void Stop()
     {
         _hook.Stop();
-        _hook.MouseClicked -= OnMouseClicked;
+        _hook.MouseDown -= OnMouseDown;
+        _hook.MouseUp -= OnMouseUp;
+        _hook.MouseWheel -= OnMouseWheel;
         _hook.TextTyped -= OnTextTyped;
         _hook.SpecialKey -= OnSpecialKey;
 
@@ -102,13 +123,26 @@ public sealed class Recorder : IDisposable
     }
 
     // ---- hook handlers (UI thread) -> enqueue -------------------------------
-    private void OnMouseClicked(int x, int y, ClickButton button)
+    private void OnMouseDown(int x, int y, ClickButton button)
     {
         if (_queue.IsAddingCompleted) return;
         // Capture the active app *now*, before this click activates anything, so
         // we can tell a real in-app click from one that just switches apps.
         int fgPid = WindowTracker.ProcessIdOf(NativeMethods.GetForegroundWindow());
         _queue.Add(new RawEvent { Kind = RawKind.Click, X = x, Y = y, Button = button, ForegroundPid = fgPid });
+    }
+
+    private void OnMouseUp(int x, int y, ClickButton button)
+    {
+        if (_queue.IsAddingCompleted || button != ClickButton.Middle) return;
+        _queue.Add(new RawEvent { Kind = RawKind.MidUp, X = x, Y = y, Button = button });
+    }
+
+    private void OnMouseWheel(int x, int y, int delta)
+    {
+        if (_queue.IsAddingCompleted) return;
+        int fgPid = WindowTracker.ProcessIdOf(NativeMethods.GetForegroundWindow());
+        _queue.Add(new RawEvent { Kind = RawKind.Wheel, X = x, Y = y, Delta = delta, ForegroundPid = fgPid });
     }
 
     private void OnTextTyped(string ch)
@@ -132,9 +166,23 @@ public sealed class Recorder : IDisposable
             {
                 case RawKind.Click:
                     FlushTyped();
-                    EmitClick(ev);
+                    FlushWheel();
+                    if (ev.Button == ClickButton.Middle)
+                        _midDown = ev;                 // defer: pan or click is known at release
+                    else
+                        HandleLeftRightClick(ev);
+                    break;
+                case RawKind.MidUp:
+                    FlushTyped();
+                    FlushWheel();
+                    HandleMiddleUp(ev);
+                    break;
+                case RawKind.Wheel:
+                    FlushTyped();
+                    AccumulateWheel(ev);               // FlushWheel emits the merged step later
                     break;
                 case RawKind.Text:
+                    FlushWheel();
                     if (!_typing)
                     {
                         _typing = true;
@@ -148,18 +196,22 @@ public sealed class Recorder : IDisposable
                     if (!_typedIgnore) _typed.Append(ev.Payload);
                     break;
                 case RawKind.Special:
+                    FlushWheel();
                     HandleSpecial(ev.Payload);
                     break;
                 case RawKind.Note:
                     FlushTyped();
+                    FlushWheel();
                     EmitNote(ev.Payload);
                     break;
                 case RawKind.Flush:
                     FlushTyped();
+                    FlushWheel();
                     break;
             }
         }
         FlushTyped();
+        FlushWheel();
     }
 
     private void HandleSpecial(string name)
@@ -210,25 +262,68 @@ public sealed class Recorder : IDisposable
         _lastContext = ctx;
     }
 
-    private void EmitClick(RawEvent ev)
+    /// <summary>Resolve the top-level window under a point and decide whether it's
+    /// a real in-app action (not our own window, not an app-switch). Returns false
+    /// to skip; otherwise yields the window title and generic app name.</summary>
+    private bool PassesSkip(int x, int y, int foregroundPid, out string window, out string app)
     {
-        // Resolve the top-level window actually under the cursor (not the
-        // post-click foreground, which races with activation).
-        IntPtr target = NativeMethods.WindowFromPoint(new NativeMethods.POINT { x = ev.X, y = ev.Y });
+        window = ""; app = "";
+        // WindowFromPoint (not the post-click foreground, which races with activation).
+        IntPtr target = NativeMethods.WindowFromPoint(new NativeMethods.POINT { x = x, y = y });
         IntPtr root = target != IntPtr.Zero ? NativeMethods.GetAncestor(target, NativeMethods.GA_ROOT) : IntPtr.Zero;
         int targetPid = WindowTracker.ProcessIdOf(root);
 
-        // Skip clicks that aren't real actions:
-        //  • clicks inside WriteUp itself, and
-        //  • clicks on a window that wasn't the active app — i.e. the click just
-        //    switched/activated another application, which isn't a step.
-        // In-app dialogs/menus share the active app's process, so they record.
         bool ours = targetPid == _ownPid;
-        bool switchedApp = ev.ForegroundPid != 0 && targetPid != ev.ForegroundPid;
-        if (ours || switchedApp)
-            return;
+        bool switchedApp = foregroundPid != 0 && targetPid != foregroundPid;
+        if (ours || switchedApp) return false;
 
-        var (window, app) = WindowTracker.DescribeWindow(root);
+        (window, app) = WindowTracker.DescribeWindow(root);
+        return true;
+    }
+
+    /// <summary>Left/right click: emit a step, but fold a fast second click in the
+    /// same spot into a double-click rather than two separate steps.</summary>
+    private void HandleLeftRightClick(RawEvent ev)
+    {
+        int now = Environment.TickCount;
+        bool isDouble = _lastClickStep != null
+            && ev.Button == _lastClickButton
+            && unchecked((uint)(now - _lastClickTick)) <= _dblClickMs
+            && Math.Abs(ev.X - _lastClickX) <= 4
+            && Math.Abs(ev.Y - _lastClickY) <= 4;
+
+        if (isDouble)
+        {
+            UpgradeToDouble(_lastClickStep!);
+            _lastClickStep = null;   // a third click starts fresh
+            return;
+        }
+
+        var step = EmitClick(ev);
+        _lastClickStep = step;
+        _lastClickButton = ev.Button;
+        _lastClickTick = now;
+        _lastClickX = ev.X;
+        _lastClickY = ev.Y;
+    }
+
+    /// <summary>Middle release: a pan when the cursor moved, otherwise a middle click.</summary>
+    private void HandleMiddleUp(RawEvent up)
+    {
+        var down = _midDown;
+        _midDown = null;
+        if (down == null) return;
+
+        if (Math.Abs(up.X - down.X) + Math.Abs(up.Y - down.Y) >= PanThreshold)
+            EmitPan(down);
+        else
+            EmitClick(down);   // a plain middle click
+    }
+
+    private Step? EmitClick(RawEvent ev)
+    {
+        if (!PassesSkip(ev.X, ev.Y, ev.ForegroundPid, out string window, out string app))
+            return null;
 
         // Ask UI Automation what's under the cursor so we can name the control and
         // outline it in the screenshot, and find the specific surface (palette /
@@ -248,7 +343,7 @@ public sealed class Recorder : IDisposable
         }
         catch { /* keep the step even if capture fails */ }
 
-        Emit(new Step
+        var step = new Step
         {
             Kind = StepKind.Click,
             Window = window,
@@ -261,6 +356,90 @@ public sealed class Recorder : IDisposable
             ScreenshotPath = baseShot,
             ZoomImagePath = zoomShot,
             Caption = ClickCaption(ev.Button, app, el)
+        };
+        Emit(step);
+        return step;
+    }
+
+    /// <summary>A middle-button drag — recorded as a pan of the view.</summary>
+    private void EmitPan(RawEvent down)
+    {
+        if (!PassesSkip(down.X, down.Y, down.ForegroundPid, out string window, out string app))
+            return;
+
+        var el = UiaInspector.Describe(down.X, down.Y);
+        string ctx = !string.IsNullOrWhiteSpace(el?.Surface) ? el!.Surface : app;
+        Remember(app, window, ctx);
+
+        string? shot = null;
+        try { shot = ScreenCapturer.CaptureContext(_shotsDir, _maxImageWidth); }
+        catch { /* ignore */ }
+
+        string appPart = string.IsNullOrWhiteSpace(ctx) ? "" : $" in {ctx}";
+        Emit(new Step
+        {
+            Kind = StepKind.Pan,
+            Window = window,
+            App = app,
+            Context = ctx,
+            AutoContext = ctx,
+            ScreenshotPath = shot,
+            Caption = $"Pan the view{appPart} (middle-button drag)."
+        });
+    }
+
+    /// <summary>Promote the previous click step into a double-click.</summary>
+    private void UpgradeToDouble(Step s)
+    {
+        string c = s.Caption;
+        string nc =
+            c.StartsWith("Right-click", StringComparison.Ordinal) ? "Double-right-click" + c.Substring("Right-click".Length) :
+            c.StartsWith("Click", StringComparison.Ordinal) ? "Double-click" + c.Substring("Click".Length) :
+            "Double-click — " + c;
+        try { _dispatcher.BeginInvoke(new Action(() => s.Caption = nc)); }
+        catch (TaskCanceledException) { /* shutting down */ }
+    }
+
+    // ---- mouse wheel --------------------------------------------------------
+    private void AccumulateWheel(RawEvent ev)
+    {
+        if (!_wheelActive)
+        {
+            _wheelActive = true;
+            _wheelDelta = 0;
+            _wheelX = ev.X; _wheelY = ev.Y; _wheelFgPid = ev.ForegroundPid;
+        }
+        _wheelDelta += ev.Delta;
+    }
+
+    private void FlushWheel()
+    {
+        if (!_wheelActive) return;
+        int delta = _wheelDelta, x = _wheelX, y = _wheelY, fg = _wheelFgPid;
+        _wheelActive = false;
+        _wheelDelta = 0;
+        if (delta == 0) return;
+
+        if (!PassesSkip(x, y, fg, out string window, out string app)) return;
+
+        var el = UiaInspector.Describe(x, y);
+        string ctx = !string.IsNullOrWhiteSpace(el?.Surface) ? el!.Surface : app;
+        Remember(app, window, ctx);
+
+        string? shot = null;
+        try { shot = ScreenCapturer.CaptureContext(_shotsDir, _maxImageWidth); }
+        catch { /* ignore */ }
+
+        string dir = delta > 0 ? "up" : "down";
+        Emit(new Step
+        {
+            Kind = StepKind.Scroll,
+            Window = window,
+            App = app,
+            Context = ctx,
+            AutoContext = ctx,
+            ScreenshotPath = shot,
+            Caption = $"Scroll {dir} (mouse wheel)."
         });
     }
 

@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows;
+using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using Microsoft.Win32;
@@ -110,6 +112,36 @@ public partial class MainWindow : Window
     {
         try { PreviewViewer.Document = FlowReport.Build(_vm.Meta, _vm.Steps.ToList()); }
         catch { /* preview is best-effort */ }
+    }
+
+    // ---- click a list item -> scroll the preview to that step ---------------
+    private void StepCard_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is Step s)
+            JumpToPreview(s);
+    }
+
+    private void JumpToPreview(Step step)
+    {
+        var para = FindParagraph(step);
+        if (para == null)
+        {
+            // Preview can be stale (auto-preview off) — rebuild once and retry.
+            RefreshPreview();
+            para = FindParagraph(step);
+        }
+        if (para is { } p)
+            Dispatcher.BeginInvoke(new Action(() => { try { p.BringIntoView(); } catch { /* ignore */ } }),
+                DispatcherPriority.Background);
+    }
+
+    private Paragraph? FindParagraph(Step step)
+    {
+        if (PreviewViewer.Document is not { } doc) return null;
+        foreach (var block in doc.Blocks)
+            if (block is Paragraph p && ReferenceEquals(p.Tag, step))
+                return p;
+        return null;
     }
 
     private void Refresh_Click(object sender, RoutedEventArgs e) => RefreshPreview();
