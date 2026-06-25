@@ -31,3 +31,6 @@ Thumbs.db
 .vs/
 *.user
 *.suo
+
+# Single-file publish output
+/app/WriteUp/publish/

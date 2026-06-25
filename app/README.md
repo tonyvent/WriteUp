@@ -29,24 +29,28 @@ publish a self-contained single file. Easiest way — double-click:
 app\publish-singlefile.cmd
 ```
 
-or in Visual Studio: right-click the **WriteUp** project → **Publish** → choose the
-**SingleFile** profile → **Publish**. Either way the result is one file:
+It cleans its output folder, publishes, and lists what it produced. The result is
+one file in a dedicated folder (kept separate from the build output on purpose):
 
 ```
-app\WriteUp\bin\Release\net8.0-windows\win-x64\publish\WriteUp.exe
+app\WriteUp\publish\WriteUp.exe   <-- copy just this one file
 ```
 
-Copy just that **`WriteUp.exe`** to the shared folder — that's the whole app. The
-logo and icon are embedded, so there are no loose files to copy and no runtime to
-install (it's ~150 MB because the .NET runtime is bundled inside).
+Copy that **`WriteUp.exe`** to the shared folder — that's the whole app. The logo
+and icon are embedded, so there are no loose files and no runtime to install
+(it's ~150 MB because the .NET runtime is bundled inside). In Visual Studio you
+can instead right-click the **WriteUp** project → **Publish** → **SingleFile**
+profile → **Publish** (same output folder).
+
+> ⚠️ **Don't copy from the `bin\` folders.** A normal build (and the
+> `bin\Release\net8.0-windows\win-x64\` folder) always has `WriteUp.exe`
+> surrounded by lots of DLLs — that exe is only a launcher and won't run on its
+> own. The standalone single file is **only** the one in `app\WriteUp\publish\`
+> produced by the script/profile above.
 
 > Smaller alternative: if every PC already has the **.NET 8 Desktop Runtime**
-> installed, you can instead publish framework-dependent
-> (`--self-contained false`) for a much smaller exe.
-
-A normal **Debug/Release build** (the `bin\…\net8.0-windows\` folder) is *not*
-copy-one-file — its `WriteUp.exe` is just a launcher that needs the sibling DLLs
-and an installed .NET runtime. Use the single-file publish above for sharing.
+> installed, publish framework-dependent (`--self-contained false`) instead for
+> a much smaller exe.
 
 ## How to use it
 1. Fill in the **Document details** (title, author, company, logo, …) — optional,
