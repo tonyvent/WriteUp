@@ -36,12 +36,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Bundled branding. The logo is copied next to the exe so the report
-         exporters can read it from disk; the icon is the app/taskbar/window icon
-         (also set as a Resource so the WPF window can load it via pack URI). -->
-    <None Update="Assets\dynamic-logo.png">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <!-- Branding compiled into the assembly so the app publishes as a single
+         self-contained .exe (no loose files to copy). The logo is read back at
+         runtime via its pack URI; the icon is the app/taskbar/window icon. -->
+    <None Remove="Assets\dynamic-logo.png" />
+    <Resource Include="Assets\dynamic-logo.png" />
     <None Remove="Assets\logo.ico" />
     <Resource Include="Assets\logo.ico" />
   </ItemGroup>
