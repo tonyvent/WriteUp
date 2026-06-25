@@ -27,6 +27,8 @@ public partial class MainWindow : Window
     private DateTime _startTime;
     private HwndSource? _source;
     private CompactBar? _compact;
+    private bool _dirty;            // recorded steps changed since the last export
+    private bool _closeConfirmed;   // the export-on-close prompt has been resolved
 
     public MainWindow()
     {
@@ -52,7 +54,7 @@ public partial class MainWindow : Window
         _previewTimer.Tick += (_, _) => { _previewTimer.Stop(); RefreshPreview(); };
 
         _vm.Steps.CollectionChanged += OnStepsChanged;
-        _vm.Meta.PropertyChanged += (_, _) => SchedulePreview();
+        _vm.Meta.PropertyChanged += (_, _) => { _dirty = true; SchedulePreview(); };
 
         Loaded += (_, _) => RefreshPreview();
     }
@@ -66,6 +68,7 @@ public partial class MainWindow : Window
         if (e.OldItems != null)
             foreach (Step s in e.OldItems)
                 s.PropertyChanged -= OnStepEdited;
+        _dirty = true;
         SchedulePreview();
     }
 
@@ -77,6 +80,7 @@ public partial class MainWindow : Window
         // that surface/app, so the user edits a category once, not step-by-step.
         if (!_propagatingContext && e.PropertyName == nameof(Step.Context) && sender is Step s)
             PropagateContext(s);
+        _dirty = true;
         SchedulePreview();
     }
 
@@ -344,6 +348,7 @@ public partial class MainWindow : Window
     private void RememberExportDir(string path)
     {
         _settings.LastExportDir = Path.GetDirectoryName(path) ?? "";
+        _dirty = false;   // current steps are now saved to a report
         PersistSettings();
     }
 
@@ -406,6 +411,62 @@ public partial class MainWindow : Window
     }
 
     // ---- shutdown -----------------------------------------------------------
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        base.OnClosing(e);
+        if (e.Cancel || _closeConfirmed) return;
+
+        // Finish any in-progress recording so the steps are final before we ask.
+        if (_vm.IsRecording) StopRecording();
+
+        if (!_vm.HasSteps || !_dirty) return;   // nothing unsaved to lose
+
+        var result = MessageBox.Show(this,
+            $"You have {_vm.StepCount} recorded step(s) that haven't been exported.\n\n" +
+            "Export before closing?",
+            "WriteUp", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
+
+        if (result == MessageBoxResult.Cancel)
+        {
+            e.Cancel = true;        // stay open
+            return;
+        }
+        if (result == MessageBoxResult.Yes)
+        {
+            e.Cancel = true;        // hold the close until the export is resolved
+            if (ExportForClose())   // user chose a file and it saved
+            {
+                _closeConfirmed = true;
+                Close();            // re-close; the guards above now pass
+            }
+            return;
+        }
+        // No → close and discard.
+        _closeConfirmed = true;
+    }
+
+    /// <summary>Run the PDF export as part of closing. Returns true if it saved,
+    /// false if the user cancelled the dialog or it failed (so we keep the app
+    /// open rather than lose the work).</summary>
+    private bool ExportForClose()
+    {
+        try
+        {
+            string? path = AskSavePath("Save PDF as", "PDF document (*.pdf)|*.pdf", "pdf");
+            if (path == null) return false;
+            DocumentExporter.SavePdf(_vm.Meta, _vm.Steps.ToList(), path);
+            RememberExportDir(path);
+            OpenFile(path);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "PDF export failed",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+            return false;
+        }
+    }
+
     protected override void OnClosed(EventArgs e)
     {
         try
