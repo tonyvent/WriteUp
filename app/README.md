@@ -52,6 +52,22 @@ profile → **Publish** (same output folder).
 > installed, publish framework-dependent (`--self-contained false`) instead for
 > a much smaller exe.
 
+## Build an installer (for download-and-install distribution)
+One-time setup: install the free [Inno Setup 6](https://jrsoftware.org/isdl.php).
+Then double-click **`app\make-installer.cmd`** — it publishes the single-file
+exe and wraps it into `app\installer\output\WriteUp-Setup-<version>.exe`.
+
+What recipients get: double-click, no admin rights needed (installs per-user),
+Start Menu + optional desktop shortcut, an entry in Windows "Installed apps"
+with a working uninstaller, and newer installers upgrade in place.
+
+When you *don't* need it: if you're just dropping `WriteUp.exe` on the shared
+drive, skip the installer — the single exe already runs anywhere.
+
+Heads-up: the exe and installer are unsigned, so Windows SmartScreen may show
+"Windows protected your PC" on first run — click "More info → Run anyway".
+Code-signing certificates make that go away but cost money.
+
 ## How to use it
 1. Fill in the **Document details** (title, author, company, logo, …) — optional,
    and remembered for next time.
