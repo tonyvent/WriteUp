@@ -13,9 +13,15 @@ public class AppSettings
     public int MaxImageWidth { get; set; } = 1600;
 
     /// <summary>Delete the working session folder (screenshots) when the app
-    /// closes so captures don't accumulate on disk. Finished reports are
-    /// exported separately and embed their own images.</summary>
-    public bool CleanupSessionsOnExit { get; set; } = true;
+    /// closes so captures don't accumulate on disk. Off by default so sessions
+    /// can be reopened later (📂 Open…); turn on in Settings to reclaim disk
+    /// space at the cost of losing reopenable sessions.</summary>
+    public bool CleanupSessionsOnExit { get; set; }
+
+    /// <summary>Run the in-app guided tour the next time the app opens.
+    /// True for new installs; cleared after the tour is finished or skipped.
+    /// Can be re-enabled from Settings.</summary>
+    public bool ShowGuidedTour { get; set; } = true;
 
     /// <summary>Hide the main window during recording and show a small movable
     /// Stop-recording bar at the top of the screen instead.</summary>

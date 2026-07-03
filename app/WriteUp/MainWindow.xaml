@@ -1,6 +1,7 @@
 <Window x:Class="WriteUp.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:WriteUp"
         Title="WriteUp" Height="780" Width="1180"
         MinHeight="600" MinWidth="900"
         Icon="Assets/logo.ico"
@@ -11,9 +12,11 @@
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <local:PathToImageConverter x:Key="PathToImage"/>
     </Window.Resources>
 
-    <Grid Margin="18">
+    <Grid x:Name="RootGrid">
+      <Grid Margin="18">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="478" MinWidth="430"/>
             <ColumnDefinition Width="6"/>
@@ -38,17 +41,20 @@
                     <TextBlock Text="Record what you do, get a write-up." FontSize="13"
                                Foreground="{StaticResource MutedBrush}"/>
                 </StackPanel>
-                <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top">
+                <StackPanel x:Name="HeaderToggles" HorizontalAlignment="Right" VerticalAlignment="Top">
                     <CheckBox Content="Always on top" IsChecked="{Binding AlwaysOnTop, Mode=TwoWay}"
                               HorizontalAlignment="Right" Foreground="{StaticResource MutedBrush}"/>
                     <CheckBox Content="Compact while recording" IsChecked="{Binding CompactWhileRecording, Mode=TwoWay}"
                               HorizontalAlignment="Right" Margin="0,6,0,0" Foreground="{StaticResource MutedBrush}"
                               ToolTip="Hide this window while recording and show a small movable Stop bar at the top of the screen."/>
+                    <Button Content="⚙ Settings" Style="{StaticResource GhostButton}"
+                            Padding="10,4" FontSize="12" Margin="0,8,0,0" HorizontalAlignment="Right"
+                            Click="Settings_Click"/>
                 </StackPanel>
             </Grid>
 
             <!-- Document details -->
-            <Border Grid.Row="1" Background="{StaticResource PanelBrush}" CornerRadius="12"
+            <Border x:Name="DetailsCard" Grid.Row="1" Background="{StaticResource PanelBrush}" CornerRadius="12"
                     BorderBrush="{StaticResource LineBrush}" BorderThickness="1" Padding="14" Margin="0,0,0,12">
                 <Expander Header="Document details" IsExpanded="True" Foreground="{StaticResource InkBrush}">
                     <Grid Margin="0,12,0,0">
@@ -102,7 +108,7 @@
             </Border>
 
             <!-- Control bar -->
-            <Border Grid.Row="2" Background="{StaticResource PanelBrush}" CornerRadius="12"
+            <Border x:Name="ControlBar" Grid.Row="2" Background="{StaticResource PanelBrush}" CornerRadius="12"
                     BorderBrush="{StaticResource LineBrush}" BorderThickness="1" Padding="14" Margin="0,0,0,12">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -139,13 +145,17 @@
                         </TextBlock>
                     </StackPanel>
 
-                    <Button Grid.Column="3" Content="＋ Add note" Style="{StaticResource GhostButton}"
-                            Click="AddNote_Click" IsEnabled="{Binding IsRecording}"/>
+                    <StackPanel Grid.Column="3" Orientation="Horizontal">
+                        <Button Content="📂 Open…" Style="{StaticResource GhostButton}" Margin="0,0,8,0"
+                                Click="OpenSession_Click" ToolTip="Reopen a previously saved session"/>
+                        <Button Content="＋ Add note" Style="{StaticResource GhostButton}"
+                                Click="AddNote_Click" IsEnabled="{Binding IsRecording}"/>
+                    </StackPanel>
                 </Grid>
             </Border>
 
             <!-- Steps -->
-            <Border Grid.Row="3" Background="{StaticResource PanelBrush}" CornerRadius="12"
+            <Border x:Name="StepsCard" Grid.Row="3" Background="{StaticResource PanelBrush}" CornerRadius="12"
                     BorderBrush="{StaticResource LineBrush}" BorderThickness="1" Padding="6">
                 <Grid>
                     <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
@@ -169,7 +179,7 @@
                                                 <Border Width="148" Height="84" CornerRadius="6"
                                                         ClipToBounds="True" Background="#FFF0F0F2"
                                                         Visibility="{Binding HasScreenshot, Converter={StaticResource BoolToVis}}">
-                                                    <Image Source="{Binding ImagePath}" Stretch="UniformToFill"/>
+                                                    <Image Source="{Binding ImagePath, Converter={StaticResource PathToImage}}" Stretch="UniformToFill"/>
                                                 </Border>
                                                 <CheckBox Content="Zoom inset" IsChecked="{Binding ShowZoom, Mode=TwoWay}"
                                                           Margin="2,5,0,0" FontSize="10" Foreground="{StaticResource MutedBrush}"
@@ -196,9 +206,24 @@
                                                          Background="Transparent" Padding="0" FontSize="14"/>
                                             </StackPanel>
 
-                                            <Button Grid.Column="3" Content="✕" Style="{StaticResource GhostButton}"
-                                                    Padding="10,6" VerticalAlignment="Top"
-                                                    Click="DeleteStep_Click" ToolTip="Remove this step"/>
+                                            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Top">
+                                                <StackPanel Margin="0,0,6,0">
+                                                    <Button Content="▲" Style="{StaticResource GhostButton}"
+                                                            Padding="8,2" FontSize="10" Margin="0,0,0,3"
+                                                            Click="MoveStepUp_Click" ToolTip="Move step up"/>
+                                                    <Button Content="▼" Style="{StaticResource GhostButton}"
+                                                            Padding="8,2" FontSize="10"
+                                                            Click="MoveStepDown_Click" ToolTip="Move step down"/>
+                                                </StackPanel>
+                                                <Button Content="✎" Style="{StaticResource GhostButton}"
+                                                        Padding="10,6" Margin="0,0,6,0"
+                                                        Click="AnnotateStep_Click"
+                                                        ToolTip="Annotate the image as currently shown: arrows, boxes, callouts, blur/redact"
+                                                        Visibility="{Binding HasScreenshot, Converter={StaticResource BoolToVis}}"/>
+                                                <Button Content="✕" Style="{StaticResource GhostButton}"
+                                                        Padding="10,6"
+                                                        Click="DeleteStep_Click" ToolTip="Remove this step"/>
+                                            </StackPanel>
                                         </Grid>
                                     </Border>
                                 </DataTemplate>
@@ -238,7 +263,7 @@
                       Background="Transparent" ResizeBehavior="PreviousAndNext"/>
 
         <!-- ============================ RIGHT: preview ====================== -->
-        <Border Grid.Column="2" Background="{StaticResource PanelBrush}" CornerRadius="12"
+        <Border x:Name="PreviewCard" Grid.Column="2" Background="{StaticResource PanelBrush}" CornerRadius="12"
                 BorderBrush="{StaticResource LineBrush}" BorderThickness="1" Padding="12">
             <Grid>
                 <Grid.RowDefinitions>
@@ -273,7 +298,7 @@
 
                 <!-- Export bar -->
                 <Grid Grid.Row="2" Margin="2,12,2,0">
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <StackPanel x:Name="ExportBar" Orientation="Horizontal" HorizontalAlignment="Right">
                         <Button Content="HTML" Style="{StaticResource GhostButton}" Margin="0,0,8,0"
                                 Click="ExportHtml_Click" IsEnabled="{Binding HasSteps}"/>
                         <Button Content="Word (.rtf)" Style="{StaticResource GhostButton}" Margin="0,0,8,0"
@@ -284,5 +309,41 @@
                 </Grid>
             </Grid>
         </Border>
+      </Grid>
+
+      <!-- ====================== Guided tour overlay ========================= -->
+      <Grid x:Name="TourOverlay" Visibility="Collapsed">
+          <!-- Dim everything except a cut-out over the highlighted element. -->
+          <Path x:Name="TourDim" Fill="#B3000000" Stretch="None"/>
+
+          <!-- Swallows clicks over the spotlight hole so the UI stays inert
+               while the tour is running. -->
+          <Rectangle Fill="Transparent"/>
+
+          <Border x:Name="TourCard" Width="340" Background="White" CornerRadius="12"
+                  HorizontalAlignment="Left" VerticalAlignment="Top" Padding="18,16">
+              <Border.Effect>
+                  <DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.35"/>
+              </Border.Effect>
+              <StackPanel>
+                  <TextBlock x:Name="TourStepLabel" Text="STEP 1 OF 7" FontSize="11"
+                             FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
+                  <TextBlock x:Name="TourTitle" Text="" FontSize="17" FontWeight="Bold"
+                             Foreground="{StaticResource InkBrush}" Margin="0,4,0,0"/>
+                  <TextBlock x:Name="TourBody" Text="" FontSize="13" TextWrapping="Wrap"
+                             Foreground="{StaticResource MutedBrush}" Margin="0,6,0,14"/>
+                  <Grid>
+                      <Button x:Name="TourSkipBtn" Content="Skip tour" Style="{StaticResource GhostButton}"
+                              Padding="12,7" HorizontalAlignment="Left" Click="TourSkip_Click"/>
+                      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                          <Button x:Name="TourBackBtn" Content="Back" Style="{StaticResource GhostButton}"
+                                  Padding="12,7" Margin="0,0,8,0" Click="TourBack_Click"/>
+                          <Button x:Name="TourNextBtn" Content="Next" Style="{StaticResource BaseButton}"
+                                  Padding="16,7" MinWidth="84" Click="TourNext_Click"/>
+                      </StackPanel>
+                  </Grid>
+              </StackPanel>
+          </Border>
+      </Grid>
     </Grid>
 </Window>

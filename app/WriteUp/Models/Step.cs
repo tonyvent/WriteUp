@@ -76,6 +76,15 @@ public class Step : INotifyPropertyChanged
 
     public bool HasScreenshot => !string.IsNullOrEmpty(ScreenshotPath);
 
+    /// <summary>Call after an image file was rewritten in place (annotation
+    /// editor) so thumbnails and the preview reload it from disk.</summary>
+    public void RaiseImageChanged()
+    {
+        OnPropertyChanged(nameof(ImagePath));
+        OnPropertyChanged(nameof(ScreenshotPath));
+        OnPropertyChanged(nameof(HasScreenshot));
+    }
+
     private string _context = "";
 
     /// <summary>Editable, generic app/window label used to group steps into

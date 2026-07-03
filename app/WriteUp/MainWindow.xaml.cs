@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     private readonly MainViewModel _vm = new();
     private readonly DispatcherTimer _timer;
     private readonly DispatcherTimer _previewTimer;
+    private readonly DispatcherTimer _saveTimer;
     private AppSettings _settings;
 
     private Recorder? _recorder;
@@ -38,9 +39,14 @@ public partial class MainWindow : Window
         ApplySettingsToUi();
         DataContext = _vm;
 
-        // Sweep up any session folders a previous run/crash left behind.
-        SessionCleanup.PurgeOrphans(_vm.OutputDir);
-        SessionCleanup.PurgeOrphans(SettingsStore.DefaultSessionsDir);
+        // Sweep up any session folders a previous run/crash left behind —
+        // but only when the user has opted into cleanup; otherwise sessions
+        // are kept on disk so they can be reopened with 📂 Open….
+        if (_settings.CleanupSessionsOnExit)
+        {
+            SessionCleanup.PurgeOrphans(_vm.OutputDir);
+            SessionCleanup.PurgeOrphans(SettingsStore.DefaultSessionsDir);
+        }
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += (_, _) =>
@@ -53,10 +59,21 @@ public partial class MainWindow : Window
         _previewTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
         _previewTimer.Tick += (_, _) => { _previewTimer.Stop(); RefreshPreview(); };
 
-        _vm.Steps.CollectionChanged += OnStepsChanged;
-        _vm.Meta.PropertyChanged += (_, _) => { _dirty = true; SchedulePreview(); };
+        // Debounced session autosave: any edit lands in session.json shortly
+        // after, so the session can be reopened later (when cleanup is off).
+        _saveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1200) };
+        _saveTimer.Tick += (_, _) => { _saveTimer.Stop(); SaveSession(); };
 
-        Loaded += (_, _) => RefreshPreview();
+        _vm.Steps.CollectionChanged += OnStepsChanged;
+        _vm.Meta.PropertyChanged += (_, _) => { _dirty = true; SchedulePreview(); ScheduleAutosave(); };
+
+        Loaded += (_, _) =>
+        {
+            RefreshPreview();
+            // First launch: run the guided tour once layout has settled.
+            if (_settings.ShowGuidedTour)
+                Dispatcher.BeginInvoke(StartTour, DispatcherPriority.Loaded);
+        };
     }
 
     // ---- live preview -------------------------------------------------------
@@ -70,6 +87,7 @@ public partial class MainWindow : Window
                 s.PropertyChanged -= OnStepEdited;
         _dirty = true;
         SchedulePreview();
+        ScheduleAutosave();
     }
 
     private bool _propagatingContext;
@@ -82,6 +100,7 @@ public partial class MainWindow : Window
             PropagateContext(s);
         _dirty = true;
         SchedulePreview();
+        ScheduleAutosave();
     }
 
     private void PropagateContext(Step edited)
@@ -240,6 +259,7 @@ public partial class MainWindow : Window
         }
         _vm.IsRecording = false;
         PersistSettings();
+        SaveSession();
         RefreshPreview();
     }
 
@@ -299,6 +319,124 @@ public partial class MainWindow : Window
     {
         if (sender is FrameworkElement fe && fe.DataContext is Step step)
             _vm.Steps.Remove(step);
+    }
+
+    private void AnnotateStep_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.DataContext is not Step step) return;
+        string? img = step.ImagePath;
+        if (string.IsNullOrWhiteSpace(img) || !File.Exists(img))
+        {
+            MessageBox.Show(this, "This step's image could not be found on disk.",
+                "WriteUp", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        // Edits apply to the image as currently shown (zoomed variant when the
+        // zoom inset is on, plain screenshot otherwise).
+        var editor = new AnnotationEditorWindow(img) { Owner = this };
+        editor.ShowDialog();
+        if (editor.ChangedOnDisk)
+        {
+            step.RaiseImageChanged();   // reload thumbnail + preview from disk
+            _dirty = true;
+            ScheduleAutosave();
+        }
+    }
+
+    private void MoveStepUp_Click(object sender, RoutedEventArgs e) => MoveStep(sender, -1);
+    private void MoveStepDown_Click(object sender, RoutedEventArgs e) => MoveStep(sender, +1);
+
+    private void MoveStep(object sender, int delta)
+    {
+        if (sender is not FrameworkElement fe || fe.DataContext is not Step step) return;
+        int i = _vm.Steps.IndexOf(step);
+        int j = i + delta;
+        if (i < 0 || j < 0 || j >= _vm.Steps.Count) return;
+        _vm.Steps.Move(i, j);
+    }
+
+    // ---- session persistence --------------------------------------------------
+    private void ScheduleAutosave()
+    {
+        if (_sessionDir == null) return; // nothing recorded/opened yet
+        _saveTimer.Stop();
+        _saveTimer.Start();
+    }
+
+    private void SaveSession()
+    {
+        if (_sessionDir == null) return;
+        try
+        {
+            Directory.CreateDirectory(_sessionDir);
+            SessionStore.Save(_sessionDir, _vm.Meta, _vm.Steps.ToList());
+        }
+        catch { /* autosave is best-effort; the explicit exports are the deliverable */ }
+    }
+
+    private void OpenSession_Click(object sender, RoutedEventArgs e)
+    {
+        if (_vm.IsRecording)
+        {
+            MessageBox.Show(this, "Stop recording before opening a session.",
+                "WriteUp", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dlg = new OpenFileDialog
+        {
+            Title = "Open a saved session",
+            Filter = "WriteUp session (session.json)|session.json|JSON files (*.json)|*.json"
+        };
+        string initial = FirstExistingDir(_vm.OutputDir, SettingsStore.DefaultSessionsDir);
+        if (!string.IsNullOrEmpty(initial)) dlg.InitialDirectory = initial;
+        if (dlg.ShowDialog(this) != true) return;
+
+        if (_vm.HasSteps)
+        {
+            var keep = MessageBox.Show(this,
+                "Replace the current steps with the opened session?",
+                "Open session", MessageBoxButton.OKCancel, MessageBoxImage.Question);
+            if (keep != MessageBoxResult.OK) return;
+            SaveSession(); // flush any pending edits before switching
+        }
+
+        try
+        {
+            var (meta, steps) = SessionStore.Load(dlg.FileName);
+
+            _vm.Steps.Clear();
+            SessionStore.ApplyMeta(meta, _vm.Meta);
+            foreach (var s in steps) _vm.Steps.Add(s);
+
+            // Future edits/annotations/autosaves belong to the opened session.
+            _sessionDir = Path.GetDirectoryName(dlg.FileName);
+            _saveTimer.Stop();  // opening isn't an edit; don't rewrite immediately
+            _dirty = false;     // freshly-opened = nothing unexported *and changed* yet
+
+            int missing = steps.Count(s => s.Kind == StepKind.Click && !s.HasScreenshot);
+            RefreshPreview();
+
+            if (missing > 0)
+                MessageBox.Show(this,
+                    $"Opened, but {missing} step(s) reference images that could not be found. " +
+                    "Their captions are intact.",
+                    "Open session", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, "Could not open the session:\n" + ex.Message,
+                "WriteUp", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void Settings_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new SettingsWindow(_settings) { Owner = this };
+        if (dlg.ShowDialog() != true) return;
+        SettingsStore.Save(_settings);
+        if (dlg.TourRequested) StartTour();
     }
 
     // ---- settings -----------------------------------------------------------
@@ -485,11 +623,15 @@ public partial class MainWindow : Window
             }
             _recorder?.Dispose();
             PersistSettings();
+            SaveSession();
 
-            // Don't let capture scratch space pile up on disk.
+            // Don't let capture scratch space pile up on disk — only when the
+            // user opted in; otherwise sessions stay reopenable via 📂 Open….
             if (_settings.CleanupSessionsOnExit)
+            {
                 SessionCleanup.Delete(_sessionDir);
-            SessionCleanup.PurgeOrphans(_vm.OutputDir, keep: _settings.CleanupSessionsOnExit ? null : _sessionDir);
+                SessionCleanup.PurgeOrphans(_vm.OutputDir);
+            }
         }
         catch { /* ignore */ }
         base.OnClosed(e);

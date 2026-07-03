@@ -68,6 +68,30 @@ profile → **Publish** (same output folder).
    desktop, wherever — not just the session folder. The app remembers your last
    export location for next time, and names the file from the report title.
 
+### Annotate screenshots (arrows, boxes, callouts, blur/redact)
+After recording, click **✎** on any step to open the image editor. Arrows,
+boxes and text callouts stay editable across sessions (they re-render from a
+backed-up original). **Blur** pixelates and **Redact** blacks out regions —
+both are burned in permanently on Save, including into the backup, so no
+un-redacted copy of that region remains on disk. Edits apply to the image as
+currently shown (zoom inset on or off). Exports and the live preview pick up
+annotations automatically.
+
+### Sessions: auto-saved, reopenable, reorderable
+Every session auto-saves a `session.json` in its folder (about a second after
+each change, plus on Stop and on exit). **📂 Open…** reloads any past session —
+steps, captions, section labels, zoom toggles, order and annotations all come
+back. Image references are stored relative to the folder, so a session folder
+can be moved or shared on a network drive. Reorder steps any time with **▲▼**.
+
+Note: reopening requires "Delete session folders when the app closes" to be
+OFF in ⚙ Settings (it now defaults to off). Turn it on to reclaim disk space
+instead — sessions then vanish on exit, as before.
+
+### Guided tour
+A short walkthrough highlights each part of the UI on first launch. Replay it
+or turn it off from **⚙ Settings** (top-right).
+
 ### Export formats
 - **PDF** — native, print-ready, page-numbered. Built with PDFsharp/MigraDoc.
 - **Word** — written as **`.rtf`**, which Word opens and edits natively; use
