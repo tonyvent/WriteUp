@@ -141,8 +141,13 @@
         <Grid Grid.Row="3" Margin="2,12,2,0">
             <TextBlock x:Name="HintText" VerticalAlignment="Center" FontSize="12"
                        Foreground="{StaticResource MutedBrush}"
-                       Text="Drag on the image to draw. Select tool: click a mark to move or delete it."/>
+                       Text="Drag to draw. With the Select tool, drag a mark to move it, or drag its round grips to change an arrow's length/angle or a callout's head and label."/>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <CheckBox x:Name="ZoomInsetToggle" Content="Zoom inset" VerticalAlignment="Center"
+                          Margin="0,0,16,0" Foreground="{StaticResource InkBrush}"
+                          Visibility="Collapsed"
+                          Checked="ZoomInset_Changed" Unchecked="ZoomInset_Changed"
+                          ToolTip="Show and annotate the version with the magnified zoom window. Applies to the step when you Save."/>
                 <Button Content="Cancel" Style="{StaticResource GhostButton}" Margin="0,0,8,0"
                         Click="Cancel_Click"/>
                 <Button Content="Save" Style="{StaticResource BaseButton}" MinWidth="110"

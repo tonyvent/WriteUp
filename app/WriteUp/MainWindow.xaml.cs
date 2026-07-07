@@ -332,9 +332,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Edits apply to the image as currently shown (zoomed variant when the
-        // zoom inset is on, plain screenshot otherwise).
-        var editor = new AnnotationEditorWindow(img) { Owner = this };
+        // The editor opens on the shown variant and can switch plain/zoom inset.
+        var editor = new AnnotationEditorWindow(step) { Owner = this };
         editor.ShowDialog();
         if (editor.ChangedOnDisk)
         {

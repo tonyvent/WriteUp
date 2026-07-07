@@ -37,29 +37,59 @@ namespace WriteUp;
 /// </summary>
 public partial class AnnotationEditorWindow : Window
 {
-    private enum DragMode { None, Drawing, Moving }
+    private enum DragMode { None, Drawing, Moving, Handle }
 
-    private readonly string _shotPath;
-    private readonly List<Annotation> _annotations;
-    private readonly double _defaultStroke;
+    private readonly Step? _step;
+    private readonly string _plainPath;
+    private readonly string? _zoomPath;
+    private readonly Dictionary<string, List<Annotation>> _annByPath = new();
+
+    private string _shotPath;
+    private List<Annotation> _annotations = new();
+    private double _defaultStroke = 4;
+    private bool _showZoom;
+    private bool _suppressZoomToggle;
 
     private Annotation? _selected;
     private Annotation? _draft;
     private DragMode _drag = DragMode.None;
     private Point _dragStart;
+    private Action<Point>? _activeHandle;   // set while dragging a grip
     private bool _suppressCalloutTextEvent;
 
     /// <summary>True if the screenshot file was rewritten (Save or Reset), so
     /// the caller should refresh any cached thumbnails/previews.</summary>
     public bool ChangedOnDisk { get; private set; }
 
-    public AnnotationEditorWindow(string shotPath)
+    public AnnotationEditorWindow(Step step)
     {
         InitializeComponent();
-        _shotPath = shotPath;
-        _annotations = AnnotationStore.Load(shotPath);
+        _step = step;
+        _plainPath = step.ScreenshotPath ?? step.ImagePath ?? "";
+        _zoomPath = step.HasZoom ? step.ZoomImagePath : null;
+        _showZoom = step.ShowZoom && _zoomPath != null;
+        _shotPath = _showZoom ? _zoomPath! : _plainPath;
 
-        var bmp = LoadUncached(AnnotationStore.BasePathFor(shotPath));
+        // Only offer the zoom toggle when the step actually has a zoomed variant.
+        if (_zoomPath != null)
+        {
+            ZoomInsetToggle.Visibility = Visibility.Visible;
+            _suppressZoomToggle = true;
+            ZoomInsetToggle.IsChecked = _showZoom;
+            _suppressZoomToggle = false;
+        }
+
+        LoadVariant();
+
+        PreviewKeyDown += OnPreviewKeyDown;
+        Loaded += (_, _) => RebuildInk();
+    }
+
+    /// <summary>Load the base image and annotation set for the current variant
+    /// (plain vs zoomed). Called on open and whenever the zoom toggle flips.</summary>
+    private void LoadVariant()
+    {
+        var bmp = LoadUncached(AnnotationStore.BasePathFor(_shotPath));
         BaseImage.Source = bmp;
         // Size everything in raw image pixels (Stretch=Fill on the Image) so
         // canvas coordinates equal image coordinates even if the PNG carries
@@ -72,8 +102,21 @@ public partial class AnnotationEditorWindow : Window
         // Sensible mark size relative to the screenshot resolution.
         _defaultStroke = Math.Max(3.0, bmp.PixelWidth / 320.0);
 
-        PreviewKeyDown += OnPreviewKeyDown;
-        Loaded += (_, _) => RebuildInk();
+        if (!_annByPath.TryGetValue(_shotPath, out var list))
+        {
+            list = AnnotationStore.Load(_shotPath);
+            _annByPath[_shotPath] = list;
+        }
+        _annotations = list;
+        Select(null);   // clears selection + callout bar and rebuilds the ink
+    }
+
+    private void ZoomInset_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressZoomToggle || _zoomPath == null) return;
+        _showZoom = ZoomInsetToggle.IsChecked == true;
+        _shotPath = _showZoom ? _zoomPath : _plainPath;
+        LoadVariant();
     }
 
     private static BitmapImage LoadUncached(string path)
@@ -114,6 +157,21 @@ public partial class AnnotationEditorWindow : Window
 
         if (tool == null) // Select
         {
+            // Grabbing a grip of the already-selected mark edits that end/corner
+            // (arrow length+angle, callout head/label, box/region resize).
+            if (_selected != null && _annotations.Contains(_selected))
+            {
+                foreach (var h in HandlesFor(_selected))
+                    if (Distance(p.X, p.Y, h.pos.X, h.pos.Y) <= HandleHitRadius)
+                    {
+                        _drag = DragMode.Handle;
+                        _activeHandle = h.apply;
+                        _dragStart = p;
+                        Ink.CaptureMouse();
+                        return;
+                    }
+            }
+
             var hit = HitTest(p);
             Select(hit);
             if (hit != null)
@@ -162,6 +220,11 @@ public partial class AnnotationEditorWindow : Window
             _dragStart = p;
             RebuildInk();
         }
+        else if (_drag == DragMode.Handle && _activeHandle != null)
+        {
+            _activeHandle(p);   // move just this grip's endpoint/corner
+            RebuildInk();
+        }
     }
 
     private void Ink_MouseUp(object sender, MouseButtonEventArgs e)
@@ -169,6 +232,7 @@ public partial class AnnotationEditorWindow : Window
         Ink.ReleaseMouseCapture();
         var mode = _drag;
         _drag = DragMode.None;
+        _activeHandle = null;
 
         if (mode != DragMode.Drawing || _draft == null) return;
         var a = _draft;
@@ -311,14 +375,17 @@ public partial class AnnotationEditorWindow : Window
     {
         try
         {
-            AnnotationStore.Save(_shotPath, _annotations);
+            // Persist every variant we loaded (plain and/or zoomed).
+            foreach (var kv in _annByPath)
+                AnnotationStore.Save(kv.Key, kv.Value);
+            if (_step != null) _step.ShowZoom = _showZoom;   // remember the chosen view
             ChangedOnDisk = true;
             DialogResult = true;
         }
         catch (Exception ex)
         {
             MessageBox.Show(this, "Could not save the annotated image:\n" + ex.Message,
-                "ProcessScribe", MessageBoxButton.OK, MessageBoxImage.Error);
+                "WriteUp", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -337,21 +404,75 @@ public partial class AnnotationEditorWindow : Window
 
         if (_selected != null && _annotations.Contains(_selected))
         {
-            var b = BoundsOf(_selected);
-            b.Inflate(6, 6);
-            var outline = new Rectangle
+            var gripBrush = new SolidColorBrush(Color.FromRgb(0x0B, 0x68, 0xCB));
+
+            // A dashed outline reads as "resize me" for rectangular marks; arrows
+            // and callouts just get their end grips.
+            if (_selected.IsRegion)
             {
-                Width = Math.Max(1, b.Width),
-                Height = Math.Max(1, b.Height),
-                Stroke = new SolidColorBrush(Color.FromRgb(0x0B, 0x68, 0xCB)),
-                StrokeThickness = Math.Max(1.5, _defaultStroke / 3),
-                StrokeDashArray = new DoubleCollection { 4, 3 },
-                IsHitTestVisible = false
-            };
-            Canvas.SetLeft(outline, b.X);
-            Canvas.SetTop(outline, b.Y);
-            Ink.Children.Add(outline);
+                var b = BoundsOf(_selected);
+                b.Inflate(6, 6);
+                var outline = new Rectangle
+                {
+                    Width = Math.Max(1, b.Width),
+                    Height = Math.Max(1, b.Height),
+                    Stroke = gripBrush,
+                    StrokeThickness = Math.Max(1.5, _defaultStroke / 3),
+                    StrokeDashArray = new DoubleCollection { 4, 3 },
+                    IsHitTestVisible = false
+                };
+                Canvas.SetLeft(outline, b.X);
+                Canvas.SetTop(outline, b.Y);
+                Ink.Children.Add(outline);
+            }
+
+            double gs = HandleSize;
+            foreach (var h in HandlesFor(_selected))
+            {
+                var grip = new Ellipse
+                {
+                    Width = gs, Height = gs,
+                    Fill = Brushes.White,
+                    Stroke = gripBrush,
+                    StrokeThickness = Math.Max(1.5, _defaultStroke / 3),
+                    IsHitTestVisible = false   // grabbed via manual hit-test in Ink_MouseDown
+                };
+                Canvas.SetLeft(grip, h.pos.X - gs / 2);
+                Canvas.SetTop(grip, h.pos.Y - gs / 2);
+                Ink.Children.Add(grip);
+            }
         }
+    }
+
+    // ---- editable grips ------------------------------------------------------
+
+    private double HandleSize => Math.Max(12.0, _defaultStroke * 3);
+    private double HandleHitRadius => HandleSize;
+
+    /// <summary>Draggable points for the selected mark and how each moves it:
+    /// arrow ends (length+angle), callout head + label anchor, or the four
+    /// corners of a box/blur/redact region (resize).</summary>
+    private List<(Point pos, Action<Point> apply)> HandlesFor(Annotation a)
+    {
+        var h = new List<(Point, Action<Point>)>();
+        switch (a.Kind)
+        {
+            case AnnotationKind.Arrow:
+                h.Add((new Point(a.X1, a.Y1), p => { a.X1 = p.X; a.Y1 = p.Y; }));
+                h.Add((new Point(a.X2, a.Y2), p => { a.X2 = p.X; a.Y2 = p.Y; }));
+                break;
+            case AnnotationKind.Callout:
+                h.Add((new Point(a.X2, a.Y2), p => { a.X2 = p.X; a.Y2 = p.Y; }));  // leader head / target
+                h.Add((new Point(a.X1, a.Y1), p => { a.X1 = p.X; a.Y1 = p.Y; }));  // label anchor
+                break;
+            default: // Box / Blur / Redact — four corners
+                h.Add((new Point(a.X1, a.Y1), p => { a.X1 = p.X; a.Y1 = p.Y; }));
+                h.Add((new Point(a.X2, a.Y1), p => { a.X2 = p.X; a.Y1 = p.Y; }));
+                h.Add((new Point(a.X2, a.Y2), p => { a.X2 = p.X; a.Y2 = p.Y; }));
+                h.Add((new Point(a.X1, a.Y2), p => { a.X1 = p.X; a.Y2 = p.Y; }));
+                break;
+        }
+        return h;
     }
 
     private void AddVisual(Annotation a)
