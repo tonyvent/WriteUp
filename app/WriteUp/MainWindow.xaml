@@ -2,8 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:WriteUp"
-        Title="WriteUp" Height="780" Width="1180"
-        MinHeight="600" MinWidth="900"
+        Title="WriteUp" Height="780" Width="1260"
+        MinHeight="600" MinWidth="1000"
         Icon="Assets/logo.ico"
         Topmost="{Binding AlwaysOnTop}"
         Background="{StaticResource BgBrush}"
@@ -18,7 +18,7 @@
     <Grid x:Name="RootGrid">
       <Grid Margin="18">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="478" MinWidth="430"/>
+            <ColumnDefinition Width="560" MinWidth="510"/>
             <ColumnDefinition Width="6"/>
             <ColumnDefinition Width="*" MinWidth="380"/>
         </Grid.ColumnDefinitions>
