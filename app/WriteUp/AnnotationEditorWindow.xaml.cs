@@ -42,7 +42,6 @@ public partial class AnnotationEditorWindow : Window
     private readonly Step? _step;
     private readonly string _plainPath;
     private readonly string? _zoomPath;
-    private readonly Dictionary<string, List<Annotation>> _annByPath = new();
 
     private string _shotPath;
     private List<Annotation> _annotations = new();
@@ -70,6 +69,11 @@ public partial class AnnotationEditorWindow : Window
         _showZoom = step.ShowZoom && _zoomPath != null;
         _shotPath = _showZoom ? _zoomPath! : _plainPath;
 
+        // Annotations are shared across the plain/zoom variants (same pixel size);
+        // the toggle only swaps which base image they're drawn on, so toggling
+        // the inset never discards edits.
+        _annotations = AnnotationStore.Load(_shotPath);
+
         // Only offer the zoom toggle when the step actually has a zoomed variant.
         if (_zoomPath != null)
         {
@@ -79,15 +83,16 @@ public partial class AnnotationEditorWindow : Window
             _suppressZoomToggle = false;
         }
 
-        LoadVariant();
+        LoadBaseImage();
+        Select(null);
 
         PreviewKeyDown += OnPreviewKeyDown;
         Loaded += (_, _) => RebuildInk();
     }
 
-    /// <summary>Load the base image and annotation set for the current variant
-    /// (plain vs zoomed). Called on open and whenever the zoom toggle flips.</summary>
-    private void LoadVariant()
+    /// <summary>(Re)load just the base image for the current variant. The
+    /// annotation list is left untouched so switching the zoom inset keeps edits.</summary>
+    private void LoadBaseImage()
     {
         var bmp = LoadUncached(AnnotationStore.BasePathFor(_shotPath));
         BaseImage.Source = bmp;
@@ -101,14 +106,6 @@ public partial class AnnotationEditorWindow : Window
 
         // Sensible mark size relative to the screenshot resolution.
         _defaultStroke = Math.Max(3.0, bmp.PixelWidth / 320.0);
-
-        if (!_annByPath.TryGetValue(_shotPath, out var list))
-        {
-            list = AnnotationStore.Load(_shotPath);
-            _annByPath[_shotPath] = list;
-        }
-        _annotations = list;
-        Select(null);   // clears selection + callout bar and rebuilds the ink
     }
 
     private void ZoomInset_Changed(object sender, RoutedEventArgs e)
@@ -116,7 +113,8 @@ public partial class AnnotationEditorWindow : Window
         if (_suppressZoomToggle || _zoomPath == null) return;
         _showZoom = ZoomInsetToggle.IsChecked == true;
         _shotPath = _showZoom ? _zoomPath : _plainPath;
-        LoadVariant();
+        LoadBaseImage();   // swap the base image only; keep the same annotations
+        RebuildInk();
     }
 
     private static BitmapImage LoadUncached(string path)
@@ -375,9 +373,7 @@ public partial class AnnotationEditorWindow : Window
     {
         try
         {
-            // Persist every variant we loaded (plain and/or zoomed).
-            foreach (var kv in _annByPath)
-                AnnotationStore.Save(kv.Key, kv.Value);
+            AnnotationStore.Save(_shotPath, _annotations);   // save the chosen variant
             if (_step != null) _step.ShowZoom = _showZoom;   // remember the chosen view
             ChangedOnDisk = true;
             DialogResult = true;
@@ -528,9 +524,14 @@ public partial class AnnotationEditorWindow : Window
             case AnnotationKind.Callout:
             {
                 double fontSize = CalloutFontSize(a);
+                Size labelSize = MeasureCallout(a);
+                // Attach the leader to the label edge nearest the target so it
+                // flips sides when the target crosses the label (matches export).
+                double lx = Math.Clamp(a.X2, a.X1, a.X1 + labelSize.Width);
+                double ly = Math.Clamp(a.Y2, a.Y1, a.Y1 + labelSize.Height);
                 var leader = new Line
                 {
-                    X1 = a.X1, Y1 = a.Y1, X2 = a.X2, Y2 = a.Y2,
+                    X1 = lx, Y1 = ly, X2 = a.X2, Y2 = a.Y2,
                     Stroke = brush, StrokeThickness = Math.Max(2, w * 0.75),
                     IsHitTestVisible = false
                 };
