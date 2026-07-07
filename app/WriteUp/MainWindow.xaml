@@ -47,9 +47,13 @@
                     <CheckBox Content="Compact while recording" IsChecked="{Binding CompactWhileRecording, Mode=TwoWay}"
                               HorizontalAlignment="Right" Margin="0,6,0,0" Foreground="{StaticResource MutedBrush}"
                               ToolTip="Hide this window while recording and show a small movable Stop bar at the top of the screen."/>
-                    <Button Content="⚙ Settings" Style="{StaticResource GhostButton}"
-                            Padding="10,4" FontSize="12" Margin="0,8,0,0" HorizontalAlignment="Right"
-                            Click="Settings_Click"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                        <Button Content="📂 Open…" Style="{StaticResource GhostButton}"
+                                Padding="10,4" FontSize="12" Margin="0,0,8,0"
+                                Click="OpenSession_Click" ToolTip="Reopen a previously saved session"/>
+                        <Button Content="⚙ Settings" Style="{StaticResource GhostButton}"
+                                Padding="10,4" FontSize="12" Click="Settings_Click"/>
+                    </StackPanel>
                 </StackPanel>
             </Grid>
 
@@ -111,18 +115,29 @@
             <Border x:Name="ControlBar" Grid.Row="2" Background="{StaticResource PanelBrush}" CornerRadius="12"
                     BorderBrush="{StaticResource LineBrush}" BorderThickness="1" Padding="14" Margin="0,0,0,12">
                 <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="14"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-                    <Button Grid.Column="0" x:Name="RecordBtn" Style="{StaticResource RecordButton}"
-                            Content="{Binding RecordButtonText}" Click="RecordBtn_Click"/>
+                    <!-- Start/Stop on the left, Add note on the right -->
+                    <Grid Grid.Row="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*" MinWidth="12"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
 
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Ellipse Width="11" Height="11" Margin="0,0,8,0">
+                        <Button Grid.Column="0" x:Name="RecordBtn" Style="{StaticResource RecordButton}"
+                                Content="{Binding RecordButtonText}" Click="RecordBtn_Click"/>
+
+                        <Button Grid.Column="2" Content="＋ Add note" Style="{StaticResource GhostButton}"
+                                VerticalAlignment="Center" Click="AddNote_Click" IsEnabled="{Binding IsRecording}"/>
+                    </Grid>
+
+                    <!-- Status line on its own row so the clock/steps are never covered -->
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="2,12,0,0">
+                        <Ellipse Width="11" Height="11" Margin="0,0,8,0" VerticalAlignment="Center">
                             <Ellipse.Style>
                                 <Style TargetType="Ellipse">
                                     <Setter Property="Fill" Value="{StaticResource MutedBrush}"/>
@@ -143,13 +158,6 @@
                         <TextBlock VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}">
                             <Run Text="{Binding StepCount, Mode=OneWay}"/><Run Text=" steps"/>
                         </TextBlock>
-                    </StackPanel>
-
-                    <StackPanel Grid.Column="3" Orientation="Horizontal">
-                        <Button Content="📂 Open…" Style="{StaticResource GhostButton}" Margin="0,0,8,0"
-                                Click="OpenSession_Click" ToolTip="Reopen a previously saved session"/>
-                        <Button Content="＋ Add note" Style="{StaticResource GhostButton}"
-                                Click="AddNote_Click" IsEnabled="{Binding IsRecording}"/>
                     </StackPanel>
                 </Grid>
             </Border>
