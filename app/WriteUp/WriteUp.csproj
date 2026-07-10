@@ -14,8 +14,10 @@
     <AssemblyName>WriteUp</AssemblyName>
     <RootNamespace>WriteUp</RootNamespace>
     <Version>0.4.0</Version>
-    <Authors>WriteUp contributors</Authors>
+    <Authors>Anthony Venturini</Authors>
+    <Company>Anthony Venturini</Company>
     <Product>WriteUp</Product>
+    <Copyright>© 2026 Anthony Venturini. All rights reserved.</Copyright>
   </PropertyGroup>
 
   <ItemGroup>

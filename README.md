@@ -199,4 +199,6 @@ WriteUp records your **screen and keystrokes** while active. It captures
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+© 2026 Anthony Venturini. All rights reserved. Proprietary — provided for
+**evaluation and source-code review only**; no right to use, deploy, copy,
+modify, or distribute without prior written permission. See [LICENSE](LICENSE).

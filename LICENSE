@@ -1,21 +1,49 @@
-MIT License
+WriteUp — Proprietary License (Evaluation and Review Only)
 
-Copyright (c) 2026 ProcessScribe contributors
+Copyright (c) 2026 Anthony Venturini. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This software and its source code (the "Software") are the exclusive property of
+Anthony Venturini (the "Owner"). The Software is provided to you ("Recipient")
+solely for internal evaluation and source-code review.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. LIMITED LICENSE. Subject to these terms, the Owner grants the Recipient a
+   personal, non-exclusive, non-transferable, non-sublicensable, revocable
+   license to view and evaluate the Software for the sole purpose of assessing
+   it. No other rights are granted.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. RESTRICTIONS. Except with the Owner's prior written permission, the Recipient
+   shall NOT:
+     (a) use, run, or deploy the Software in production or for any operational,
+         commercial, or business purpose;
+     (b) copy, reproduce, publish, distribute, disclose, or make the Software
+         available to any third party;
+     (c) modify, adapt, translate, or create derivative works of the Software;
+     (d) sell, rent, lease, sublicense, or otherwise transfer the Software or any
+         rights in it; or
+     (e) remove or alter any copyright, license, or proprietary notices.
+
+3. NO TRANSFER OF OWNERSHIP. Nothing in this license transfers any ownership,
+   copyright, patent, trademark, or other intellectual-property right in the
+   Software. All rights not expressly granted are reserved by the Owner.
+
+4. SEPARATE AGREEMENT REQUIRED. Any use of the Software beyond the evaluation and
+   review permitted above — including any production use, licensing, or
+   distribution — requires a separate written agreement signed by the Owner.
+
+5. TERMINATION. This license terminates automatically if the Recipient breaches
+   any term, and may be revoked by the Owner at any time. On termination the
+   Recipient must stop using the Software and destroy all copies in its control.
+
+6. THIRD-PARTY COMPONENTS. The Software uses third-party components that remain
+   under their own licenses (e.g., PDFsharp/MigraDoc, MIT). Those licenses apply
+   only to those components, not to the Software as a whole.
+
+7. NO WARRANTY. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+8. LIMITATION OF LIABILITY. IN NO EVENT SHALL THE OWNER BE LIABLE FOR ANY CLAIM,
+   DAMAGES, OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT, OR OTHERWISE, ARISING
+   FROM OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
+
+For permissions beyond the scope of this license, contact Anthony Venturini.
