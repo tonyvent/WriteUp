@@ -1,5 +1,8 @@
+using System;
 using System.Windows;
+using System.Windows.Controls;
 using WriteUp.Models;
+using WriteUp.Services;
 
 namespace WriteUp;
 
@@ -48,4 +51,36 @@ public partial class SettingsWindow : Window
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
+
+    private void SendFeedback_Click(object sender, RoutedEventArgs e)
+    {
+        string message = FeedbackMessage.Text.Trim();
+        if (message.Length == 0)
+        {
+            MessageBox.Show(this, "Please describe the problem or request first.",
+                "Report a problem", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var report = new FeedbackReport
+        {
+            Category = (FeedbackCategory.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Bug",
+            Message = message,
+            Contact = FeedbackContact.Text.Trim()
+        };
+
+        try
+        {
+            string path = FeedbackService.Submit(report);
+            MessageBox.Show(this, "Thanks — your report was saved:\n\n" + path,
+                "Report sent", MessageBoxButton.OK, MessageBoxImage.Information);
+            FeedbackMessage.Text = "";
+            FeedbackContact.Text = "";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, "Could not save the report:\n" + ex.Message,
+                "Report a problem", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
 }

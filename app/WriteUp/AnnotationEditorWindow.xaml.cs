@@ -94,7 +94,8 @@ public partial class AnnotationEditorWindow : Window
     /// annotation list is left untouched so switching the zoom inset keeps edits.</summary>
     private void LoadBaseImage()
     {
-        var bmp = LoadUncached(AnnotationStore.BasePathFor(_shotPath));
+        var bmp = ImageLoad.FromFile(AnnotationStore.BasePathFor(_shotPath));
+        if (bmp == null) return;   // file vanished; keep whatever is shown
         BaseImage.Source = bmp;
         // Size everything in raw image pixels (Stretch=Fill on the Image) so
         // canvas coordinates equal image coordinates even if the PNG carries
@@ -117,17 +118,6 @@ public partial class AnnotationEditorWindow : Window
         RebuildInk();
     }
 
-    private static BitmapImage LoadUncached(string path)
-    {
-        var bi = new BitmapImage();
-        bi.BeginInit();
-        bi.CacheOption = BitmapCacheOption.OnLoad;
-        bi.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
-        bi.UriSource = new Uri(path, UriKind.Absolute);
-        bi.EndInit();
-        bi.Freeze();
-        return bi;
-    }
 
     // ---- tool / color state --------------------------------------------------
 

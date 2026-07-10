@@ -43,6 +43,39 @@
             </StackPanel>
         </Border>
 
+        <!-- Report a problem: collapsed by default; the pieces here are the seam
+             for a richer feedback flow later. -->
+        <Expander Header="Report a problem" Margin="0,0,0,14"
+                  Foreground="{StaticResource InkBrush}">
+            <Border Background="{StaticResource PanelBrush}" CornerRadius="10" Padding="14"
+                    BorderBrush="{StaticResource LineBrush}" BorderThickness="1" Margin="0,8,0,0">
+                <StackPanel>
+                    <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource MutedBrush}"
+                               Margin="0,0,0,10"
+                               Text="Tell us what went wrong or what you'd like added. Reports are saved on this PC so they can be collected."/>
+
+                    <TextBlock Text="TYPE" Style="{StaticResource FieldLabel}"/>
+                    <ComboBox x:Name="FeedbackCategory" SelectedIndex="0" Width="190"
+                              HorizontalAlignment="Left" Margin="0,4,0,10">
+                        <ComboBoxItem Content="Bug"/>
+                        <ComboBoxItem Content="Feature request"/>
+                        <ComboBoxItem Content="Other"/>
+                    </ComboBox>
+
+                    <TextBlock Text="DETAILS" Style="{StaticResource FieldLabel}"/>
+                    <TextBox x:Name="FeedbackMessage" Height="92" Margin="0,4,0,10"
+                             TextWrapping="Wrap" AcceptsReturn="True"
+                             VerticalScrollBarVisibility="Auto"/>
+
+                    <TextBlock Text="YOUR NAME OR EMAIL (OPTIONAL)" Style="{StaticResource FieldLabel}"/>
+                    <TextBox x:Name="FeedbackContact" Margin="0,4,0,12"/>
+
+                    <Button Content="Send report" Style="{StaticResource GhostButton}" Padding="12,7"
+                            HorizontalAlignment="Left" Click="SendFeedback_Click"/>
+                </StackPanel>
+            </Border>
+        </Expander>
+
         <Grid>
             <Button Content="Cancel" Style="{StaticResource GhostButton}"
                     HorizontalAlignment="Left" Click="Cancel_Click"/>

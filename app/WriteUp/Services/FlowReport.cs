@@ -105,24 +105,6 @@ public static class FlowReport
         return new BlockUIContainer(border) { Margin = new Thickness(0) };
     }
 
-    private static BitmapImage? LoadImage(string? path, int decodeWidth)
-    {
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return null;
-        try
-        {
-            var bi = new BitmapImage();
-            bi.BeginInit();
-            bi.CacheOption = BitmapCacheOption.OnLoad;          // don't keep the file locked
-            bi.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
-            bi.DecodePixelWidth = decodeWidth;                  // downscale for snappy preview
-            bi.UriSource = new Uri(path, UriKind.Absolute);
-            bi.EndInit();
-            bi.Freeze();
-            return bi;
-        }
-        catch
-        {
-            return null;
-        }
-    }
+    private static BitmapImage? LoadImage(string? path, int decodeWidth) =>
+        ImageLoad.FromFile(path, decodeWidth);
 }
