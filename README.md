@@ -13,14 +13,12 @@ teammate as a tutorial or standard operating procedure.
 Built for people who do complicated multi-step processes (Fusion, AutoCAD,
 Inventor, Revit, SolidWorks, etc.) and are tired of writing the docs by hand.
 
-> **Two ways to use WriteUp**
-> - **Windows desktop app (recommended)** — a real point-and-click app with a
+> - **Windows desktop app** — a real point-and-click app with a
 >   Start/Stop button, live editable steps, and one-click export. Open
 >   [`app/WriteUp.sln`](app/) in Visual Studio 2022, or see
 >   [`app/README.md`](app/README.md). Built in C# / .NET 8 WPF with no NuGet
 >   dependencies, and easy to publish as a single shareable `.exe`.
-> - **Python command-line tool** — the original cross-platform CLI, documented
->   below, with native PDF and Word export.
+
 
 ---
 
@@ -40,22 +38,6 @@ Inventor, Revit, SolidWorks, etc.) and are tired of writing the docs by hand.
 
 See [`examples/extrude-a-boss/`](examples/extrude-a-boss/) for a sample session
 and its generated `report.html` / `report.md`.
-
----
-
-## Install
-
-Requires Python 3.9+.
-
-```bash
-git clone <your-repo-url> process-scribe
-cd process-scribe
-python -m venv .venv
-# Windows:  .venv\Scripts\activate
-# macOS/Linux: source .venv/bin/activate
-pip install -e .            # core (Markdown + HTML)
-pip install -e ".[export]"  # add Word (.docx) and PDF export
-```
 
 ### Platform notes
 - **Windows** — works out of the box.
