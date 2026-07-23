@@ -71,15 +71,21 @@ public partial class SettingsWindow : Window
 
         try
         {
-            string path = FeedbackService.Submit(report);
-            MessageBox.Show(this, "Thanks — your report was saved:\n\n" + path,
-                "Report sent", MessageBoxButton.OK, MessageBoxImage.Information);
+            string path = FeedbackService.Submit(report);   // local backup copy
+            bool mailed = FeedbackService.EmailTo(report);  // open mail client
+
+            MessageBox.Show(this,
+                mailed
+                    ? "Your email app should open with the report ready — just hit Send."
+                    : "Couldn't open a mail app, but your report was saved here:\n\n" + path,
+                "Report a problem", MessageBoxButton.OK, MessageBoxImage.Information);
+
             FeedbackMessage.Text = "";
             FeedbackContact.Text = "";
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, "Could not save the report:\n" + ex.Message,
+            MessageBox.Show(this, "Could not send the report:\n" + ex.Message,
                 "Report a problem", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
