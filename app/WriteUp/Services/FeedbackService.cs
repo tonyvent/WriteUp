@@ -48,7 +48,7 @@ public static class FeedbackService
     /// maintainer. Returns true if a mail client was launched.</summary>
     public static bool EmailTo(FeedbackReport report)
     {
-        const string to = "anthonyventurini827@gmail.com";   // where reports go
+        const string to = "aventurini@dynamicec.com";   // where reports go
 
         report.AppVersion = AppVersion();
         report.Os = Environment.OSVersion.VersionString;
