@@ -107,6 +107,7 @@ public static class DocumentExporter
         }
 
         // Steps grouped by app
+        var numbers = StepText.Numbers(steps);
         int n = 0;
         string? current = null;
         foreach (var s in steps)
@@ -125,8 +126,13 @@ public static class DocumentExporter
             n++;
             var pp = sec.AddParagraph();
             pp.Format.SpaceBefore = Unit.FromCentimeter(0.15);
-            pp.AddFormattedText(n + ".  ", TextFormat.Bold);
-            pp.AddText(s.Caption);
+            pp.Format.LeftIndent = Unit.FromCentimeter(s.Level * 0.4);
+            pp.AddBookmark("step-" + s.Id);
+            pp.AddFormattedText(numbers[s.Id] + ".  ", TextFormat.Bold);
+            AddText(pp, StepText.ResolveReferences(s.Caption, numbers));
+            if (!string.IsNullOrWhiteSpace(s.Notes)) { pp.AddLineBreak(); AddText(pp, StepText.ResolveReferences(s.Notes, numbers)); }
+            string reference = StepText.Reference(s, numbers);
+            if (reference.Length > 0) { pp.AddLineBreak(); AddText(pp, reference); }
 
             if (s.ImagePath is { } imgPath && File.Exists(imgPath))
             {
@@ -139,5 +145,19 @@ public static class DocumentExporter
         }
 
         return doc;
+    }
+    private static void AddText(Paragraph paragraph, string text)
+    {
+        foreach (var span in StepText.Parse(text))
+        {
+            if (span.Link != null)
+            {
+                var link = span.Link.StartsWith("#")
+                    ? paragraph.AddHyperlink(span.Link[1..], HyperlinkType.Local)
+                    : paragraph.AddHyperlink(span.Link, HyperlinkType.Web);
+                link.AddText(span.Text);
+            }
+            else paragraph.AddFormattedText(span.Text, span.Bold && span.Italic ? TextFormat.Bold | TextFormat.Italic : span.Bold ? TextFormat.Bold : span.Italic ? TextFormat.Italic : TextFormat.NotBold);
+        }
     }
 }

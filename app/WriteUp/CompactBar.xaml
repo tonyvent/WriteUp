@@ -26,6 +26,7 @@
 
             <Button Content="＋ Note" Style="{StaticResource BaseButton}" Background="#FF3A3A3D"
                     Padding="10,6" FontSize="12" Margin="14,0,0,0" Click="Note_Click"/>
+            <Button Content="{Binding MicrophoneLabel}" Click="Narration_Click" Padding="10,6" Margin="8,0,0,0"/>
             <Button Content="■ Stop" Style="{StaticResource BaseButton}" Background="{StaticResource StopBrush}"
                     Padding="12,6" FontSize="12" Margin="8,0,0,0" Click="Stop_Click"/>
         </StackPanel>

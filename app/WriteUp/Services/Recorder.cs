@@ -16,11 +16,15 @@ namespace WriteUp.Services;
 /// </summary>
 public sealed class Recorder : IDisposable
 {
-    private enum RawKind { Click, MidUp, Wheel, Text, Special, Note, Flush }
+    private enum RawKind { Click, MidUp, Wheel, Text, Special, Note, Context, Narration, Flush }
 
     private sealed class RawEvent
     {
         public RawKind Kind;
+        public DateTime Timestamp = DateTime.Now;
+        public int Tick = Environment.TickCount;
+        public IntPtr Window;
+        public bool AllScreens;
         public int X;
         public int Y;
         public ClickButton Button;
@@ -30,6 +34,7 @@ public sealed class Recorder : IDisposable
     }
 
     public event Action<Step>? StepAdded;
+    public event Action<DateTime, string>? NarrationReady;
 
     private readonly Dispatcher _dispatcher;
     private readonly string _shotsDir;
@@ -37,17 +42,24 @@ public sealed class Recorder : IDisposable
     private readonly InputHook _hook = new();
     private readonly BlockingCollection<RawEvent> _queue = new();
     private Task? _worker;
+    private readonly DispatcherTimer _windowTimer = new() { Interval = TimeSpan.FromMilliseconds(600) };
+    private IntPtr _lastExternalWindow;
+    private string _lastExternalTitle = "";
+    private int _contextPending;
+    private bool _disposed;
+    public event Action<string>? CaptureWarning;
 
     // Typed-text accumulation (worker thread only).
     private readonly StringBuilder _typed = new();
     private bool _typing;
+    private DateTime _typedStarted;
     private bool _typedIgnore;          // typing happened in our own window — drop it
     private string _typedApp = "";
     private string _typedWindow = "";
     private string _typedField = "";   // focused control name when typing began
 
     // Focus tracking (worker thread only) so we can ignore our own window and
-    // clicks that merely switch/activate a different application. Tracked by
+    // identify the external application. Tracked by
     // process so in-app dialogs/menus (same process) still record normally.
     private int _ownPid;
     private string _lastApp = "";       // last external app we recorded in,
@@ -89,10 +101,22 @@ public sealed class Recorder : IDisposable
         _hook.SpecialKey += OnSpecialKey;
         _worker = Task.Factory.StartNew(Consume, TaskCreationOptions.LongRunning);
         _hook.Start();
+        _windowTimer.Tick += ObserveWindow;
+        _windowTimer.Start();
     }
 
-    public void Stop()
+    public async Task StopAsync()
     {
+        StopInput();
+        if (_worker != null) await _worker;
+        // Flush the queued StepAdded notifications before autosave/export.
+        await _dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+    }
+
+    private void StopInput()
+    {
+        _windowTimer.Stop();
+        _windowTimer.Tick -= ObserveWindow;
         _hook.Stop();
         _hook.MouseDown -= OnMouseDown;
         _hook.MouseUp -= OnMouseUp;
@@ -105,21 +129,49 @@ public sealed class Recorder : IDisposable
             _queue.Add(new RawEvent { Kind = RawKind.Flush });
             _queue.CompleteAdding();
         }
-        try { _worker?.Wait(2000); } catch { /* ignore */ }
+
     }
 
     /// <summary>Insert a manual note/checkpoint with a screenshot of the screen.</summary>
     public void AddNote(string caption)
     {
         if (_queue.IsAddingCompleted) return;
-        _queue.Add(new RawEvent { Kind = RawKind.Note, Payload = caption });
+        _queue.Add(new RawEvent { Kind = RawKind.Note, Payload = caption, Window = _lastExternalWindow });
     }
 
     public void Dispose()
     {
-        Stop();
+        if (_disposed) return;
+        _disposed = true;
+        StopInput();
         _hook.Dispose();
-        _queue.Dispose();
+        if (_worker == null || _worker.IsCompleted) _queue.Dispose();
+        else _ = _worker.ContinueWith(_ => _queue.Dispose());
+    }
+
+    public void AddNarration(DateTime at, string text)
+    {
+        if (!_queue.IsAddingCompleted)
+            _queue.Add(new RawEvent { Kind = RawKind.Narration, Timestamp = at, Payload = text });
+    }
+
+    public void CaptureNow(bool allScreens = false)
+    {
+        IntPtr active = NativeMethods.GetForegroundWindow();
+        IntPtr target = WindowTracker.ProcessIdOf(active) == _ownPid ? _lastExternalWindow : active;
+        if (!_queue.IsAddingCompleted)
+            _queue.Add(new RawEvent { Kind = RawKind.Context, Window = target, AllScreens = allScreens });
+    }
+
+    private void ObserveWindow(object? sender, EventArgs args)
+    {
+        var (hwnd, title, _) = WindowTracker.GetActiveInfo();
+        if (hwnd == IntPtr.Zero || WindowTracker.ProcessIdOf(hwnd) == _ownPid) return;
+        if (hwnd == _lastExternalWindow && title == _lastExternalTitle) return;
+        if (System.Threading.Interlocked.CompareExchange(ref _contextPending, 1, 0) != 0) return;
+        _lastExternalWindow = hwnd;
+        _lastExternalTitle = title;
+        if (!_queue.IsAddingCompleted) _queue.Add(new RawEvent { Kind = RawKind.Context, Window = hwnd });
     }
 
     // ---- hook handlers (UI thread) -> enqueue -------------------------------
@@ -148,7 +200,7 @@ public sealed class Recorder : IDisposable
     private void OnTextTyped(string ch)
     {
         if (_queue.IsAddingCompleted) return;
-        _queue.Add(new RawEvent { Kind = RawKind.Text, Payload = ch });
+        _queue.Add(new RawEvent { Kind = RawKind.Text, Payload = ch, Window = NativeMethods.GetForegroundWindow() });
     }
 
     private void OnSpecialKey(string name)
@@ -162,53 +214,70 @@ public sealed class Recorder : IDisposable
     {
         foreach (var ev in _queue.GetConsumingEnumerable())
         {
-            switch (ev.Kind)
+            try
             {
-                case RawKind.Click:
-                    FlushTyped();
-                    FlushWheel();
-                    if (ev.Button == ClickButton.Middle)
-                        _midDown = ev;                 // defer: pan or click is known at release
-                    else
-                        HandleLeftRightClick(ev);
-                    break;
-                case RawKind.MidUp:
-                    FlushTyped();
-                    FlushWheel();
-                    HandleMiddleUp(ev);
-                    break;
-                case RawKind.Wheel:
-                    FlushTyped();
-                    AccumulateWheel(ev);               // FlushWheel emits the merged step later
-                    break;
-                case RawKind.Text:
-                    FlushWheel();
-                    if (!_typing)
-                    {
-                        _typing = true;
-                        var (hwnd, window, app) = WindowTracker.GetActiveInfo();
-                        int pid = WindowTracker.ProcessIdOf(hwnd);
-                        _typedWindow = window;
-                        _typedApp = app;
-                        _typedField = UiaInspector.FocusedName();
-                        _typedIgnore = pid == _ownPid;   // typing inside WriteUp itself
-                    }
-                    if (!_typedIgnore) _typed.Append(ev.Payload);
-                    break;
-                case RawKind.Special:
-                    FlushWheel();
-                    HandleSpecial(ev.Payload);
-                    break;
-                case RawKind.Note:
-                    FlushTyped();
-                    FlushWheel();
-                    EmitNote(ev.Payload);
-                    break;
-                case RawKind.Flush:
-                    FlushTyped();
-                    FlushWheel();
-                    break;
+                switch (ev.Kind)
+                {
+                    case RawKind.Click:
+                        FlushTyped();
+                        FlushWheel();
+                        if (ev.Button == ClickButton.Middle)
+                            _midDown = ev;                 // defer: pan or click is known at release
+                        else
+                            HandleLeftRightClick(ev);
+                        break;
+                    case RawKind.MidUp:
+                        FlushTyped();
+                        FlushWheel();
+                        HandleMiddleUp(ev);
+                        break;
+                    case RawKind.Wheel:
+                        FlushTyped();
+                        AccumulateWheel(ev);               // FlushWheel emits the merged step later
+                        break;
+                    case RawKind.Text:
+                        FlushWheel();
+                        var (eventWindow, eventApp) = WindowTracker.DescribeWindow(ev.Window);
+                        if (_typing && (eventWindow != _typedWindow || eventApp != _typedApp)) FlushTyped();
+                        if (!_typing)
+                        {
+                            _typing = true;
+                            _typedStarted = ev.Timestamp;
+                            var hwnd = ev.Window;
+                            var (window, app) = (eventWindow, eventApp);
+                            int pid = WindowTracker.ProcessIdOf(hwnd);
+                            _typedWindow = window;
+                            _typedApp = app;
+                            _typedField = NativeMethods.GetForegroundWindow() == hwnd ? UiaInspector.FocusedName() : "";
+                            _typedIgnore = pid == _ownPid;   // typing inside WriteUp itself
+                        }
+                        if (!_typedIgnore) _typed.Append(ev.Payload);
+                        break;
+                    case RawKind.Special:
+                        FlushWheel();
+                        HandleSpecial(ev.Payload);
+                        break;
+                    case RawKind.Note:
+                        FlushTyped();
+                        FlushWheel();
+                        EmitNote(ev.Payload, ev.Window);
+                        break;
+                    case RawKind.Narration:
+                        FlushTyped(); FlushWheel();
+                        _dispatcher.BeginInvoke(new Action(() => NarrationReady?.Invoke(ev.Timestamp, ev.Payload)));
+                        break;
+                    case RawKind.Context:
+                        FlushTyped(); FlushWheel();
+                        EmitContext(ev);
+                        System.Threading.Interlocked.Exchange(ref _contextPending, 0);
+                        break;
+                    case RawKind.Flush:
+                        FlushTyped();
+                        FlushWheel();
+                        break;
+                }
             }
+            catch (Exception ex) { Warn("An action could not be captured: " + ex.Message); }
         }
         FlushTyped();
         FlushWheel();
@@ -263,7 +332,7 @@ public sealed class Recorder : IDisposable
     }
 
     /// <summary>Resolve the top-level window under a point and decide whether it's
-    /// a real in-app action (not our own window, not an app-switch). Returns false
+    /// an external action (not our own window). Returns false
     /// to skip; otherwise yields the window title and generic app name.</summary>
     private bool PassesSkip(int x, int y, int foregroundPid, out string window, out string app)
     {
@@ -274,8 +343,7 @@ public sealed class Recorder : IDisposable
         int targetPid = WindowTracker.ProcessIdOf(root);
 
         bool ours = targetPid == _ownPid;
-        bool switchedApp = foregroundPid != 0 && targetPid != foregroundPid;
-        if (ours || switchedApp) return false;
+        if (ours || targetPid == 0) return false;
 
         (window, app) = WindowTracker.DescribeWindow(root);
         return true;
@@ -285,7 +353,7 @@ public sealed class Recorder : IDisposable
     /// same spot into a double-click rather than two separate steps.</summary>
     private void HandleLeftRightClick(RawEvent ev)
     {
-        int now = Environment.TickCount;
+        int now = ev.Tick;
         bool isDouble = _lastClickStep != null
             && ev.Button == _lastClickButton
             && unchecked((uint)(now - _lastClickTick)) <= _dblClickMs
@@ -341,11 +409,12 @@ public sealed class Recorder : IDisposable
             (baseShot, zoomShot) = ScreenCapturer.CaptureClick(_shotsDir, ev.X, ev.Y,
                 el?.Bounds ?? System.Drawing.Rectangle.Empty, _maxImageWidth);
         }
-        catch { /* keep the step even if capture fails */ }
+        catch (Exception ex) { Warn(ex.Message); }
 
         var step = new Step
         {
             Kind = StepKind.Click,
+            Timestamp = ev.Timestamp,
             Window = window,
             App = app,
             Context = ctx,
@@ -485,7 +554,25 @@ public sealed class Recorder : IDisposable
         return $"{verb} at the highlighted location in {appName}.";
     }
 
-    private void EmitNote(string caption)
+    private void EmitContext(RawEvent ev)
+    {
+        // Discard stale automatic switches rather than photographing a different window.
+        if (!ev.AllScreens && NativeMethods.GetForegroundWindow() != ev.Window) return;
+        var (window, app) = WindowTracker.DescribeWindow(ev.Window);
+        try
+        {
+            string shot = ScreenCapturer.CaptureContext(_shotsDir, _maxImageWidth, ev.Window, ev.AllScreens);
+            Remember(app, window, app);
+            Emit(new Step { Kind = StepKind.Note, Timestamp = ev.Timestamp, Window = window,
+                App = app, Context = app, AutoContext = app, ScreenshotPath = shot,
+                Caption = ev.AllScreens ? "Compare the information across the screens." : $"Review {window}." });
+        }
+        catch (Exception ex) { Warn(ex.Message); }
+    }
+
+    private void Warn(string message) => _dispatcher.BeginInvoke(new Action(() => CaptureWarning?.Invoke(message)));
+
+    private void EmitNote(string caption, IntPtr targetWindow)
     {
         // A note is added from WriteUp's own button, so the foreground would be
         // WriteUp — keep the note in the section of the last app the user worked in.
@@ -494,7 +581,7 @@ public sealed class Recorder : IDisposable
         string? shot = null;
         try
         {
-            shot = ScreenCapturer.CaptureContext(_shotsDir, _maxImageWidth);
+            shot = ScreenCapturer.CaptureContext(_shotsDir, _maxImageWidth, targetWindow);
         }
         catch { /* ignore */ }
 
@@ -537,6 +624,7 @@ public sealed class Recorder : IDisposable
         Emit(new Step
         {
             Kind = StepKind.Type,
+            Timestamp = _typedStarted,
             Window = _typedWindow,
             App = _typedApp,
             Context = ctx,

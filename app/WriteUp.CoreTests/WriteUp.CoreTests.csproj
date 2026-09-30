@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../WriteUp/Models/Step.cs" Link="Step.cs" />
+    <Compile Include="../WriteUp/Models/SessionMeta.cs" Link="SessionMeta.cs" />
+    <Compile Include="../WriteUp/Models/Annotation.cs" Link="Annotation.cs" />
+    <Compile Include="../WriteUp/Services/SessionStore.cs" Link="SessionStore.cs" />
+    <Compile Include="../WriteUp/Services/StepHistory.cs" Link="StepHistory.cs" />
+    <Compile Include="../WriteUp/Services/StepText.cs" Link="StepText.cs" />
+    <Compile Include="../WriteUp/Services/ReportWriter.cs" Link="ReportWriter.cs" />
+  </ItemGroup>
+</Project>

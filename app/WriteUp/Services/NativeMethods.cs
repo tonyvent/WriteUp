@@ -6,6 +6,16 @@ namespace WriteUp.Services;
 /// <summary>All Win32 interop in one place.</summary>
 internal static class NativeMethods
 {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MONITORINFO { public int cbSize; public RECT Monitor, Work; public uint Flags; }
+    [DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr value);
+    [DllImport("user32.dll")] public static extern IntPtr MonitorFromPoint(POINT point, uint flags);
+    [DllImport("user32.dll")] public static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFO info);
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr window, out RECT rect);
+    [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
+
     // ---- Hook ids & messages ------------------------------------------------
     public const int WH_KEYBOARD_LL = 13;
     public const int WH_MOUSE_LL = 14;

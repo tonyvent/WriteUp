@@ -158,6 +158,15 @@ public static class AnnotationStore
 
         switch (a.Kind)
         {
+            case AnnotationKind.Badge:
+            {
+                using var brush = new SolidBrush(color);
+                g.FillEllipse(brush, (float)a.X1, (float)a.Y1, 44, 44);
+                using var font = new Font("Segoe UI", 20, FontStyle.Bold, GraphicsUnit.Pixel);
+                using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                g.DrawString(a.Text, font, Brushes.White, new RectangleF((float)a.X1, (float)a.Y1, 44, 44), format);
+                break;
+            }
             case AnnotationKind.Box:
             {
                 using var pen = new Pen(color, w) { LineJoin = LineJoin.Round };

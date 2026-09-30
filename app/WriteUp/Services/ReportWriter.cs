@@ -48,6 +48,7 @@ public static class ReportWriter
         sb.AppendLine(string.Join(" | ", MetaBits(m).Select(b => $"**{b.label}:** {b.value}")));
         sb.AppendLine().AppendLine("---").AppendLine();
 
+        var numbers = StepText.Numbers(steps);
         int n = 0;
         string? currentApp = null;
         foreach (var s in steps)
@@ -58,7 +59,10 @@ public static class ReportWriter
                 sb.AppendLine().Append("## In ").AppendLine(s.Context).AppendLine();
             }
             n++;
-            sb.Append("**").Append(n).Append(".** ").AppendLine(s.Caption);
+            sb.Append("<a id=\"step-").Append(s.Id).AppendLine("\"></a>");
+            sb.Append("**").Append(numbers[s.Id]).Append(".** ").AppendLine(StepText.ResolveReferences(s.Caption, numbers));
+            if (!string.IsNullOrWhiteSpace(s.Notes)) sb.AppendLine().AppendLine(StepText.ResolveReferences(s.Notes, numbers));
+            sb.AppendLine(StepText.Reference(s, numbers));
             if (s.HasScreenshot)
                 sb.AppendLine().Append("![Step ").Append(n).Append("](")
                   .Append(RelativeShot(s)).AppendLine(")");
@@ -102,6 +106,7 @@ public static class ReportWriter
               .Append(Enc(value)).Append("</div>");
         sb.Append("</div>");
 
+        var numbers = StepText.Numbers(steps);
         int n = 0;
         string? currentApp = null;
         foreach (var s in steps)
@@ -112,8 +117,11 @@ public static class ReportWriter
                 sb.Append("<h2>In ").Append(Enc(s.Context)).Append("</h2>");
             }
             n++;
-            sb.Append("<div class='step'><div class='num'>").Append(n).Append("</div><div class='body'><p>")
-              .Append(Enc(s.Caption)).Append("</p>");
+            sb.Append("<div class='step' id='step-").Append(Enc(s.Id)).Append("' style='margin-left:")
+              .Append(s.Level * 20).Append("px'><div class='num'>").Append(numbers[s.Id]).Append("</div><div class='body'><p>")
+              .Append(StepText.Html(StepText.ResolveReferences(s.Caption, numbers))).Append("</p>");
+            if (!string.IsNullOrWhiteSpace(s.Notes)) sb.Append("<p>").Append(StepText.Html(StepText.ResolveReferences(s.Notes, numbers))).Append("</p>");
+            sb.Append("<p>").Append(StepText.Html(StepText.Reference(s, numbers))).Append("</p>");
             string? img = EmbedImage(s.ImagePath);
             if (img != null)
                 sb.Append("<img src='").Append(img).Append("' alt='Step ").Append(n).Append("'>");

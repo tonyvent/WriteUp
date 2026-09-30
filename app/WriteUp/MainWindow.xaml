@@ -132,7 +132,7 @@
                                 Content="{Binding RecordButtonText}" Click="RecordBtn_Click"/>
 
                         <Button Grid.Column="2" Content="＋ Add note" Style="{StaticResource GhostButton}"
-                                VerticalAlignment="Center" Click="AddNote_Click" IsEnabled="{Binding IsRecording}"/>
+                                VerticalAlignment="Center" Click="AddNote_Click"/>
                     </Grid>
 
                     <!-- Status line on its own row so the clock/steps are never covered -->
@@ -223,6 +223,7 @@
                                                             Padding="8,2" FontSize="10"
                                                             Click="MoveStepDown_Click" ToolTip="Move step down"/>
                                                 </StackPanel>
+                                                <Button Content="Edit" Click="EditStep_Click" Margin="0,0,6,0" Padding="8,6"/>
                                                 <Button Content="✎" Style="{StaticResource GhostButton}"
                                                         Padding="10,6" Margin="0,0,6,0"
                                                         Click="AnnotateStep_Click"
@@ -261,6 +262,14 @@
 
             <!-- Left footer: hotkey -->
             <StackPanel Grid.Row="4" Margin="2,12,0,0">
+                <WrapPanel>
+                    <Button Content="Undo step edit" Click="UndoSteps_Click" Margin="0,0,6,6"/>
+                    <Button Content="Redo step edit" Click="RedoSteps_Click" Margin="0,0,6,6"/>
+                    <Button x:Name="NarrateBtn" Content="{Binding MicrophoneLabel}" Click="Narrate_Click" Margin="0,0,6,6"/>
+                    <Button Content="Capture all screens" Click="CaptureScreens_Click" IsEnabled="{Binding IsRecording}" Margin="0,0,6,6"/>
+                </WrapPanel>
+                <TextBlock x:Name="CaptureStatus" TextWrapping="Wrap" FontSize="12"/>
+                <TextBlock Text="Ctrl+Alt+S: active screen · Ctrl+Alt+A: all screens" FontSize="12"/>
                 <TextBlock Foreground="{StaticResource MutedBrush}" FontSize="12"
                            Text="Global hotkey: Ctrl+Alt+R to start/stop"/>
             </StackPanel>

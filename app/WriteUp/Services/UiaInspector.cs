@@ -21,7 +21,8 @@ public static class UiaInspector
         public string Surface = ""; // descriptive container, e.g. "TOOLSPACE palette"
     }
 
-    private const int TimeoutMs = 800;
+    private const int TimeoutMs = 250;
+    private static readonly System.Threading.SemaphoreSlim Gate = new(1, 1);
 
     /// <summary>Describe the control at screen point (x, y), including the
     /// descriptive container surface (palette/pane/window) it lives in.</summary>
@@ -30,6 +31,21 @@ public static class UiaInspector
         var el = AutomationElement.FromPoint(new System.Windows.Point(x, y));
         if (el == null) return null;
         var info = Read(el);
+        if (info.ControlType is "label" or "image" || string.IsNullOrWhiteSpace(info.Name))
+        {
+            var parent = TreeWalker.ControlViewWalker.GetParent(el);
+            for (int depth = 0; parent != null && depth < 3; depth++, parent = TreeWalker.ControlViewWalker.GetParent(parent))
+            {
+                var candidate = Read(parent);
+                if (candidate.ControlType is "button" or "link" or "menu item" or "tab" or "checkbox" or "option"
+                    && candidate.Bounds.Contains(x, y) && candidate.Bounds.Width <= 700 && candidate.Bounds.Height <= 300)
+                { info = candidate; break; }
+            }
+        }
+        // Never use a whole page/pane as the name of a clicked control.
+        if (info.Bounds.IsEmpty || !info.Bounds.Contains(x, y)) return null;
+        if (info.ControlType is "document" or "pane" or "window" or "group")
+        { info.Name = ""; info.ControlType = ""; info.Bounds = Rectangle.Empty; }
         info.Surface = FindSurface(el) ?? "";
         return info;
     });
@@ -40,7 +56,7 @@ public static class UiaInspector
         var info = RunGuarded(() =>
         {
             var el = AutomationElement.FocusedElement;
-            return el == null ? null : Read(el);
+            return el == null || el.Current.ControlType != ControlType.Edit || el.Current.IsPassword ? null : Read(el);
         });
         return info?.Name ?? "";
     }
@@ -69,7 +85,8 @@ public static class UiaInspector
         if (t == ControlType.RadioButton) return "option";
         if (t == ControlType.MenuItem) return "menu item";
         if (t == ControlType.TabItem) return "tab";
-        if (t == ControlType.Edit || t == ControlType.Document) return "field";
+        if (t == ControlType.Edit) return "field";
+        if (t == ControlType.Document) return "document";
         if (t == ControlType.ComboBox) return "dropdown";
         if (t == ControlType.Hyperlink) return "link";
         if (t == ControlType.ListItem) return "item";
@@ -153,7 +170,8 @@ public static class UiaInspector
     {
         try
         {
-            var task = Task.Run(work);
+            if (!Gate.Wait(0)) return null;
+            var task = Task.Run(() => { try { using var dpi = new DpiScope(); return work(); } finally { Gate.Release(); } });
             return task.Wait(TimeoutMs) ? task.Result : null;
         }
         catch { return null; }

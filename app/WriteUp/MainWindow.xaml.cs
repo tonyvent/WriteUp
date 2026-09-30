@@ -28,6 +28,12 @@ public partial class MainWindow : Window
     private DateTime _startTime;
     private HwndSource? _source;
     private CompactBar? _compact;
+    private readonly StepHistory _history = new();
+    private bool _restoringHistory;
+    private bool _stopping;
+    private NarrationService? _narration;
+    private readonly List<(DateTime at, string text)> _pendingNarration = new();
+    private DateTime _recordingStart;
     private bool _dirty;            // recorded steps changed since the last export
     private bool _closeConfirmed;   // the export-on-close prompt has been resolved
 
@@ -38,6 +44,7 @@ public partial class MainWindow : Window
         _settings = SettingsStore.Load();
         ApplySettingsToUi();
         DataContext = _vm;
+        _history.Reset(_vm.Steps);
 
         // Sweep up any session folders a previous run/crash left behind —
         // but only when the user has opted into cleanup; otherwise sessions
@@ -86,6 +93,7 @@ public partial class MainWindow : Window
             foreach (Step s in e.OldItems)
                 s.PropertyChanged -= OnStepEdited;
         _dirty = true;
+        RememberHistory();
         SchedulePreview();
         ScheduleAutosave();
     }
@@ -99,6 +107,7 @@ public partial class MainWindow : Window
         if (!_propagatingContext && e.PropertyName == nameof(Step.Context) && sender is Step s)
             PropagateContext(s);
         _dirty = true;
+        RememberHistory();
         SchedulePreview();
         ScheduleAutosave();
     }
@@ -197,6 +206,10 @@ public partial class MainWindow : Window
         NativeMethods.RegisterHotKey(
             helper.Handle, HotkeyId,
             NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT | NativeMethods.MOD_NOREPEAT, VK_R);
+        NativeMethods.RegisterHotKey(helper.Handle, HotkeyId + 1,
+            NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT | NativeMethods.MOD_NOREPEAT, 0x53);
+        NativeMethods.RegisterHotKey(helper.Handle, HotkeyId + 2,
+            NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT | NativeMethods.MOD_NOREPEAT, 0x41);
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -206,15 +219,18 @@ public partial class MainWindow : Window
             ToggleRecording();
             handled = true;
         }
+        if (msg == NativeMethods.WM_HOTKEY && wParam.ToInt32() is var id && (id == HotkeyId + 1 || id == HotkeyId + 2))
+        { _recorder?.CaptureNow(id == HotkeyId + 2); handled = true; }
         return IntPtr.Zero;
     }
 
     // ---- recording ----------------------------------------------------------
     private void RecordBtn_Click(object sender, RoutedEventArgs e) => ToggleRecording();
 
-    private void ToggleRecording()
+    private async void ToggleRecording()
     {
-        if (_vm.IsRecording) StopRecording();
+        if (_stopping) return;
+        if (_vm.IsRecording) await StopRecording();
         else StartRecording();
     }
 
@@ -224,11 +240,14 @@ public partial class MainWindow : Window
         {
             string root = string.IsNullOrWhiteSpace(_vm.OutputDir)
                 ? SettingsStore.DefaultSessionsDir : _vm.OutputDir;
-            _sessionDir = Path.Combine(root, DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+            _sessionDir ??= Path.Combine(root, DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..8]);
             Directory.CreateDirectory(_sessionDir);
 
             _recorder = new Recorder(Dispatcher, _sessionDir, _settings.MaxImageWidth);
             _recorder.StepAdded += OnStepAdded;
+            _recorder.NarrationReady += AttachNarration;
+            _recordingStart = DateTime.Now;
+            _recorder.CaptureWarning += message => CaptureStatus.Text = "Capture issue: " + message;
             _recorder.Start();
 
             _startTime = DateTime.Now;
@@ -241,26 +260,40 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            _recorder?.Dispose(); _recorder = null; _vm.IsRecording = false;
             MessageBox.Show(this, "Could not start recording:\n" + ex.Message,
                 "WriteUp", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
-    private void StopRecording()
+    private async Task StopRecording()
     {
-        ExitCompactMode();
-        _timer.Stop();
-        if (_recorder != null)
+        if (_stopping) return;
+        _stopping = true;
+        RecordBtn.IsEnabled = false;
+        try
         {
-            _recorder.StepAdded -= OnStepAdded;
-            _recorder.Stop();
-            _recorder.Dispose();
-            _recorder = null;
+            ExitCompactMode();
+            _timer.Stop();
+            if (_recorder != null)
+            {
+                await _recorder.StopAsync();
+                _recorder.StepAdded -= OnStepAdded;
+                _recorder.Dispose();
+                _recorder = null;
+            }
+            if (_narration != null) { await _narration.StopAsync(); _narration = null; }
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+            foreach (var (at, text) in _pendingNarration) AttachNarration(at, text);
+            _pendingNarration.Clear();
+            _vm.MicrophoneLabel = "Microphone off";
+            _vm.IsRecording = false;
+            _history.Reset(_vm.Steps);
+            PersistSettings();
+            SaveSession();
+            RefreshPreview();
         }
-        _vm.IsRecording = false;
-        PersistSettings();
-        SaveSession();
-        RefreshPreview();
+        finally { _stopping = false; RecordBtn.IsEnabled = true; }
     }
 
     // ---- compact (minimized) recording bar ----------------------------------
@@ -269,18 +302,19 @@ public partial class MainWindow : Window
         var bar = new CompactBar { DataContext = _vm };
         bar.StopClicked += () => ToggleRecording();
         bar.NoteClicked += () => _recorder?.AddNote("");
+        bar.NarrationClicked += () => Narrate_Click(this, new RoutedEventArgs());
         bar.Closed += CompactBar_Closed;
         _compact = bar;
         bar.Show();
         Hide();   // tuck the main window away; the bar drives recording
     }
 
-    private void CompactBar_Closed(object? sender, EventArgs e)
+    private async void CompactBar_Closed(object? sender, EventArgs e)
     {
         // Bar closed without us tearing it down (e.g. Alt+F4) — stop and restore.
         if (_compact == null) return;
         _compact = null;
-        if (_vm.IsRecording) StopRecording();
+        if (_vm.IsRecording) await StopRecording();
         else RestoreFromCompact();
     }
 
@@ -312,17 +346,35 @@ public partial class MainWindow : Window
 
     private void AddNote_Click(object sender, RoutedEventArgs e)
     {
-        _recorder?.AddNote("");
+        EnsureSession();
+        _vm.Steps.Add(new Step { Kind = StepKind.Note, Caption = "New instruction" });
     }
 
     private void DeleteStep_Click(object sender, RoutedEventArgs e)
     {
+        if (_vm.IsRecording) return;
         if (sender is FrameworkElement fe && fe.DataContext is Step step)
+        {
+            // Keep a shared image reachable if its original step is removed.
+            _restoringHistory = true;
+            var dependents = _vm.Steps.Where(s => s.SharedImageStepId == step.Id).ToList();
+            if (dependents.Count > 0)
+            {
+                var owner = dependents[0];
+                owner.ScreenshotPath = step.ScreenshotPath; owner.ZoomImagePath = step.ZoomImagePath;
+                owner.ShowZoom = step.ShowZoom; owner.HideImage = false; owner.SharedImageStepId = null;
+                foreach (var child in dependents.Skip(1)) child.SharedImageStepId = owner.Id;
+                owner.RaiseImageChanged();
+            }
             _vm.Steps.Remove(step);
+            _restoringHistory = false;
+            RememberHistory();
+        }
     }
 
     private void AnnotateStep_Click(object sender, RoutedEventArgs e)
     {
+        if (_vm.IsRecording) return;
         if (sender is not FrameworkElement fe || fe.DataContext is not Step step) return;
         string? img = step.ImagePath;
         if (string.IsNullOrWhiteSpace(img) || !File.Exists(img))
@@ -348,6 +400,7 @@ public partial class MainWindow : Window
 
     private void MoveStep(object sender, int delta)
     {
+        if (_vm.IsRecording) return;
         if (sender is not FrameworkElement fe || fe.DataContext is not Step step) return;
         int i = _vm.Steps.IndexOf(step);
         int j = i + delta;
@@ -405,9 +458,13 @@ public partial class MainWindow : Window
         {
             var (meta, steps) = SessionStore.Load(dlg.FileName);
 
+            _restoringHistory = true;
+            foreach (var old in _vm.Steps) old.PropertyChanged -= OnStepEdited;
             _vm.Steps.Clear();
             SessionStore.ApplyMeta(meta, _vm.Meta);
             foreach (var s in steps) _vm.Steps.Add(s);
+            _restoringHistory = false;
+            _history.Reset(_vm.Steps);
 
             // Future edits/annotations/autosaves belong to the opened session.
             _sessionDir = Path.GetDirectoryName(dlg.FileName);
@@ -450,13 +507,20 @@ public partial class MainWindow : Window
     }
 
     // ---- shutdown -----------------------------------------------------------
-    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    protected override async void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
         base.OnClosing(e);
         if (e.Cancel || _closeConfirmed) return;
 
         // Finish any in-progress recording so the steps are final before we ask.
-        if (_vm.IsRecording) StopRecording();
+        if (_vm.IsRecording || _stopping)
+        {
+            e.Cancel = true;
+            if (_stopping) return;
+            await StopRecording();
+            Close();
+            return;
+        }
 
         if (!_vm.HasSteps || !_dirty) return;   // nothing unsaved to lose
 
@@ -498,8 +562,11 @@ public partial class MainWindow : Window
             {
                 var helper = new WindowInteropHelper(this);
                 NativeMethods.UnregisterHotKey(helper.Handle, HotkeyId);
+                NativeMethods.UnregisterHotKey(helper.Handle, HotkeyId + 1);
+                NativeMethods.UnregisterHotKey(helper.Handle, HotkeyId + 2);
                 _source.RemoveHook(WndProc);
             }
+            _narration?.Dispose();
             _recorder?.Dispose();
             PersistSettings();
             SaveSession();
@@ -514,5 +581,84 @@ public partial class MainWindow : Window
         }
         catch { /* ignore */ }
         base.OnClosed(e);
+    }
+
+    private void EnsureSession()
+    {
+        _sessionDir ??= Path.Combine(_vm.OutputDir, DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(_sessionDir);
+    }
+
+    private void RememberHistory()
+    {
+        if (!_vm.IsRecording && !_restoringHistory && !_propagatingContext) _history.Record(_vm.Steps);
+    }
+    private void RestoreHistory(List<Step>? steps)
+    {
+        if (steps == null) return;
+        _restoringHistory = true;
+        try
+        {
+            foreach (var old in _vm.Steps) old.PropertyChanged -= OnStepEdited;
+            _vm.Steps.Clear();
+            foreach (var s in steps) _vm.Steps.Add(s);
+        }
+        finally { _restoringHistory = false; }
+        RefreshPreview();
+    }
+    private void UndoSteps_Click(object sender, RoutedEventArgs e) { if (!_vm.IsRecording) RestoreHistory(_history.Undo()); }
+    private void RedoSteps_Click(object sender, RoutedEventArgs e) { if (!_vm.IsRecording) RestoreHistory(_history.Redo()); }
+    private void EditStep_Click(object sender, RoutedEventArgs e)
+    {
+        if (_vm.IsRecording || sender is not FrameworkElement fe || fe.DataContext is not Step step) return;
+        _restoringHistory = true;
+        try { new StepEditorWindow(step, _vm.Steps.ToList()) { Owner = this }.ShowDialog(); }
+        finally { _restoringHistory = false; RememberHistory(); }
+    }
+    private void CaptureScreens_Click(object sender, RoutedEventArgs e) => _recorder?.CaptureNow(true);
+    private async void Narrate_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_vm.IsRecording || _stopping || !NarrateBtn.IsEnabled) return;
+        NarrateBtn.IsEnabled = false;
+        try
+        {
+            if (_narration != null)
+            {
+                await _narration.StopAsync(); _narration = null;
+                _vm.MicrophoneLabel = "Microphone off";
+            }
+            else
+            {
+                var narration = new NarrationService();
+                narration.Transcribed += (at, text) => Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (_stopping) _pendingNarration.Add((at, text));
+                    else _recorder?.AddNarration(at, text);
+                    CaptureStatus.Text = "Transcribed: " + text;
+                }));
+                narration.Status += text => Dispatcher.BeginInvoke(new Action(() => CaptureStatus.Text = text));
+                _narration = narration;
+                narration.Start();
+                _vm.MicrophoneLabel = "Microphone ON";
+            }
+        }
+        catch (Exception ex)
+        {
+            _narration?.Dispose(); _narration = null;
+            _vm.MicrophoneLabel = "Microphone off";
+            MessageBox.Show(this, "Could not start narration: " + ex.Message, "Narration");
+        }
+        finally { NarrateBtn.IsEnabled = true; }
+    }
+    private void AttachNarration(DateTime at, string text)
+    {
+        var step = _vm.Steps.Where(s => s.Timestamp >= _recordingStart && s.Timestamp <= at).OrderBy(s => s.Timestamp).LastOrDefault();
+        if (step == null)
+        {
+            step = new Step { Kind = StepKind.Note, Timestamp = at, Caption = "Business context" };
+            int index = _vm.Steps.TakeWhile(s => s.Timestamp <= at).Count();
+            _vm.Steps.Insert(index, step);
+        }
+        step.Notes = string.IsNullOrWhiteSpace(step.Notes) ? text : step.Notes + "\n" + text;
     }
 }

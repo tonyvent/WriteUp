@@ -188,3 +188,67 @@ app/
   caption is editable in the UI before export, so you can always fix wording.
 - The preview is a faithful WPF rendering of the report; the exported PDF/Word may
   differ very slightly in pagination but matches content and styling.
+
+## 0.5.0 — capture and editor enhancements
+
+- **Narration:** while recording, click **Microphone off** in the main window or
+  compact bar to turn dictation on. Explain why you are performing each action.
+  Recognized phrases are added to the notes of the step active when the phrase
+  began; speech before the first action becomes a business-context step. Notes
+  autosave and appear in every report format. Click again to stop dictation.
+  This uses the installed Windows speech recognizer and default microphone:
+  install a speech language and allow desktop microphone access if unavailable.
+  Recognition happens locally; WriteUp does not save audio or upload it.
+- **Descriptions:** browser documents are no longer classified as text fields.
+  Hit-test bounds are checked, small actionable parents of icon/label controls
+  are preferred, and unknown targets use an honest highlighted-location caption.
+  UI Automation remains best-effort, especially for custom-drawn controls.
+- **Shared screenshots:** click **Edit** on a step and select the screenshot from
+  another step. The report renders the image once and links the other instructions
+  to it. Open the source image's **✎** editor and use **1 2 3** or **A B C** to
+  place markers, then set each instruction's matching annotation label in Edit.
+  Existing captures are retained so sharing can be undone. Consolidation is an
+  author decision; similar screens are not automatically merged.
+- **Editing:** Edit includes business-context notes with bold/italic formatting,
+  web/email links and references to other steps, five levels of instruction
+  hierarchy, screenshot selection, and text-only mode. **Add note** also works
+  outside recording and adds a text-only instruction. Formatting is stored as a
+  small Markdown vocabulary and rendered in HTML, PDF, Word-compatible RTF and
+  the preview. The Windows app's Word output is still RTF, not native DOCX.
+- **Undo/redo:** use **Undo step edit / Redo step edit** for description edits,
+  deletions, reordering, nesting, screenshot sharing and note changes. Step
+  history holds the latest 200 snapshots for the current editing session and
+  resets when opening a session or completing a recording. Text editors also
+  have their normal local undo. The image editor has separate Undo/Redo buttons
+  and Ctrl+Z/Ctrl+Y for drawing, moving, resizing, editing labels, deleting and
+  resetting marks. Reset is staged until Save; Cancel leaves the image intact.
+  Previously saved blur/redaction remains permanent. Image history is local to
+  the open image editor, not the step-history buttons.
+- **Multiple monitors/windows:** captures now resolve native physical-pixel
+  monitor geometry in an explicit per-monitor DPI context; negative display
+  coordinates are supported. Foreground-window/title changes are checked every
+  600 ms while recording, so switching windows without clicking can produce a
+  context screenshot. Very brief switches can be missed. **Ctrl+Alt+S** captures
+  the current application's monitor; **Ctrl+Alt+A** or **Capture all screens**
+  captures the full virtual desktop for comparisons. These are desktop captures,
+  so visible overlapping windows are included. Click captures remain on the
+  clicked monitor and respect the existing maximum image-width setting.
+
+Stopping, exporting or closing now drains queued capture events and the final
+recognized speech before saving. Continuing a recording keeps its images in the
+same session folder. Sessions saved by older versions can still be opened.
+
+### Regression checks
+
+```powershell
+dotnet build app/WriteUp/WriteUp.csproj -c Release
+dotnet run --project app/WriteUp.CoreTests -c Release
+```
+
+The core checks cover session backward compatibility and portability, undo/redo,
+shared images, nested numbering, safe links, formatted HTML/Markdown and the
+existing annotation enum values. GitHub Actions also builds on Windows.
+
+Before distributing this version, run the [Windows acceptance checks](../docs/WINDOWS-ACCEPTANCE.md)
+with a microphone and mixed-DPI monitors. A successful cross-build is not a live
+capture or speech-recognition test.

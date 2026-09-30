@@ -51,8 +51,10 @@ public partial class MainWindow
         PersistSettings();
     }
 
-    private void ExportPdf_Click(object sender, RoutedEventArgs e)
+    private async void ExportPdf_Click(object sender, RoutedEventArgs e)
     {
+        if (_stopping) return;
+        if (_vm.IsRecording) await StopRecording();
         string? path = AskSavePath("Save PDF as", "PDF document (*.pdf)|*.pdf", "pdf");
         if (path == null) return;
         try
@@ -68,8 +70,10 @@ public partial class MainWindow
         }
     }
 
-    private void ExportWord_Click(object sender, RoutedEventArgs e)
+    private async void ExportWord_Click(object sender, RoutedEventArgs e)
     {
+        if (_stopping) return;
+        if (_vm.IsRecording) await StopRecording();
         string? path = AskSavePath("Save Word document as", "Word-compatible RTF (*.rtf)|*.rtf", "rtf");
         if (path == null) return;
         try
@@ -85,8 +89,10 @@ public partial class MainWindow
         }
     }
 
-    private void ExportHtml_Click(object sender, RoutedEventArgs e)
+    private async void ExportHtml_Click(object sender, RoutedEventArgs e)
     {
+        if (_stopping) return;
+        if (_vm.IsRecording) await StopRecording();
         string? path = AskSavePath("Save HTML as", "Web page (*.html)|*.html", "html");
         if (path == null) return;
         try

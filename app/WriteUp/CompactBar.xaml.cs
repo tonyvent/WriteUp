@@ -10,6 +10,8 @@ public partial class CompactBar : Window
 {
     public event Action? StopClicked;
     public event Action? NoteClicked;
+    public event Action? NarrationClicked;
+    private void Narration_Click(object sender, RoutedEventArgs e) => NarrationClicked?.Invoke();
 
     public CompactBar()
     {

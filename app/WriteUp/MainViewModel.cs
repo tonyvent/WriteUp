@@ -19,6 +19,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         };
     }
 
+    private string _microphoneLabel = "Microphone off";
+    public string MicrophoneLabel { get => _microphoneLabel; set { _microphoneLabel = value; OnPropertyChanged(); } }
     private bool _isRecording;
     public bool IsRecording
     {
