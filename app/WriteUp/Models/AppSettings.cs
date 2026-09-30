@@ -10,6 +10,14 @@ public class AppSettings
     public string DefaultDepartment { get; set; } = "";
     public string DefaultLogoPath { get; set; } = "";
     public bool AlwaysOnTop { get; set; } = true;
+    public bool NarrationEnabled { get; set; } = true;
+    public int MicrophoneDevice { get; set; } = -1;
+    public string MicrophoneName { get; set; } = "";
+    public string SpeechRecognizerId { get; set; } = "";
+    public bool CaptureClicks { get; set; } = true;
+    public bool CaptureTyping { get; set; } = true;
+    public bool CaptureScrolling { get; set; } = true;
+    public bool CaptureWindowChanges { get; set; } = true;
     public int MaxImageWidth { get; set; } = 1600;
 
     /// <summary>Delete the working session folder (screenshots) when the app

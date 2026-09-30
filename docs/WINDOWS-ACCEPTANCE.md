@@ -1,9 +1,10 @@
-# WriteUp 0.5.0 Windows acceptance checks
+# WriteUp 0.5.1 Windows acceptance checks
 
 Run on Windows 10/11 with the .NET 8 desktop runtime (or a self-contained publish).
 These are manual hardware/UI checks, not claims of completed validation.
 
-1. **Narration timing:** start recording, enable the microphone, speak context
+1. **Narration timing:** select and test the microphone/language in Settings, then start recording
+   with automatic narration enabled and speak context
    before a click, click three controls while narrating, then stop mid-phrase.
    Confirm text is associated with the action at phrase start and final results
    are saved. Repeat using the compact bar. Test no microphone, denied access,
@@ -39,3 +40,13 @@ These are manual hardware/UI checks, not claims of completed validation.
 8. **Persistence:** open a version-1 session; edit and save it, move the entire
    session folder, reopen it and export. Continue recording, stop, close and
    reopen again. Check images, zoom state, notes, nesting and links.
+
+9. **Recording preferences:** disable typing but keep clicks; confirm typed text
+   is omitted and click screenshots still arrive. Repeat with clicks disabled,
+   scroll disabled and automatic window-change capture disabled. Confirm settings
+   survive restart. Capture buttons and hotkeys should still support manual shots.
+10. **Layouts:** resize Settings, main, step editor and annotation editor to their
+    minimum sizes; expand feedback in Settings, use long context names and long
+    transcripts, and scroll. Check Save/Cancel, start/stop, microphone controls and
+    all annotation tools remain reachable and do not overlap text. Repeat at
+    150% and 200% display scaling.

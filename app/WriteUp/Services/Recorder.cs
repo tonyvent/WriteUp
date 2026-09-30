@@ -40,6 +40,7 @@ public sealed class Recorder : IDisposable
     private readonly string _shotsDir;
     private readonly int _maxImageWidth;
     private readonly InputHook _hook = new();
+    private readonly bool _captureClicks, _captureTyping, _captureScrolling, _captureWindowChanges;
     private readonly BlockingCollection<RawEvent> _queue = new();
     private Task? _worker;
     private readonly DispatcherTimer _windowTimer = new() { Interval = TimeSpan.FromMilliseconds(600) };
@@ -82,9 +83,12 @@ public sealed class Recorder : IDisposable
     private bool _wheelActive;
     private int _wheelDelta, _wheelX, _wheelY, _wheelFgPid;
 
-    public Recorder(Dispatcher dispatcher, string sessionDir, int maxImageWidth)
+    public Recorder(Dispatcher dispatcher, string sessionDir, int maxImageWidth, AppSettings? settings = null)
     {
         _dispatcher = dispatcher;
+        settings ??= new AppSettings();
+        _captureClicks = settings.CaptureClicks; _captureTyping = settings.CaptureTyping;
+        _captureScrolling = settings.CaptureScrolling; _captureWindowChanges = settings.CaptureWindowChanges;
         _shotsDir = Path.Combine(sessionDir, "screenshots");
         _maxImageWidth = maxImageWidth;
         Directory.CreateDirectory(_shotsDir);
@@ -100,7 +104,7 @@ public sealed class Recorder : IDisposable
         _hook.TextTyped += OnTextTyped;
         _hook.SpecialKey += OnSpecialKey;
         _worker = Task.Factory.StartNew(Consume, TaskCreationOptions.LongRunning);
-        _hook.Start();
+        _hook.Start(mouse: _captureClicks || _captureScrolling, keyboard: _captureTyping);
         _windowTimer.Tick += ObserveWindow;
         _windowTimer.Start();
     }
@@ -167,6 +171,7 @@ public sealed class Recorder : IDisposable
     {
         var (hwnd, title, _) = WindowTracker.GetActiveInfo();
         if (hwnd == IntPtr.Zero || WindowTracker.ProcessIdOf(hwnd) == _ownPid) return;
+        if (!_captureWindowChanges) { _lastExternalWindow = hwnd; _lastExternalTitle = title; return; }
         if (hwnd == _lastExternalWindow && title == _lastExternalTitle) return;
         if (System.Threading.Interlocked.CompareExchange(ref _contextPending, 1, 0) != 0) return;
         _lastExternalWindow = hwnd;
@@ -177,6 +182,7 @@ public sealed class Recorder : IDisposable
     // ---- hook handlers (UI thread) -> enqueue -------------------------------
     private void OnMouseDown(int x, int y, ClickButton button)
     {
+        if (!_captureClicks) return;
         if (_queue.IsAddingCompleted) return;
         // Capture the active app *now*, before this click activates anything, so
         // we can tell a real in-app click from one that just switches apps.
@@ -186,12 +192,14 @@ public sealed class Recorder : IDisposable
 
     private void OnMouseUp(int x, int y, ClickButton button)
     {
+        if (!_captureClicks) return;
         if (_queue.IsAddingCompleted || button != ClickButton.Middle) return;
         _queue.Add(new RawEvent { Kind = RawKind.MidUp, X = x, Y = y, Button = button });
     }
 
     private void OnMouseWheel(int x, int y, int delta)
     {
+        if (!_captureScrolling) return;
         if (_queue.IsAddingCompleted) return;
         int fgPid = WindowTracker.ProcessIdOf(NativeMethods.GetForegroundWindow());
         _queue.Add(new RawEvent { Kind = RawKind.Wheel, X = x, Y = y, Delta = delta, ForegroundPid = fgPid });
@@ -212,8 +220,13 @@ public sealed class Recorder : IDisposable
     // ---- worker (background thread) -----------------------------------------
     private void Consume()
     {
-        foreach (var ev in _queue.GetConsumingEnumerable())
+        while (!_queue.IsCompleted)
         {
+            if (!_queue.TryTake(out var ev, 450))
+            {
+                FlushTyped(); FlushWheel();
+                continue;
+            }
             try
             {
                 switch (ev.Kind)

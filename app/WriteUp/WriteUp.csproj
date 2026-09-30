@@ -13,7 +13,7 @@
     <ApplicationIcon>Assets\logo.ico</ApplicationIcon>
     <AssemblyName>WriteUp</AssemblyName>
     <RootNamespace>WriteUp</RootNamespace>
-    <Version>0.5.0</Version>
+    <Version>0.5.1</Version>
     <Authors>Anthony Venturini</Authors>
     <Company>Anthony Venturini</Company>
     <Product>WriteUp</Product>
@@ -34,6 +34,7 @@
   <ItemGroup>
     <!-- Native PDF + RTF(Word) export. MIT-licensed; the WPF build uses system
          fonts and WPF imaging, so no font resolver setup is needed. -->
+    <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="System.Speech" Version="8.0.0" />
     <PackageReference Include="PDFsharp-MigraDoc-WPF" Version="6.2.4" />
   </ItemGroup>

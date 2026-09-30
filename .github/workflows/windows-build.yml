@@ -15,3 +15,5 @@ jobs:
           dotnet-version: '8.0.x'
       - run: dotnet build app/WriteUp/WriteUp.csproj -c Release
       - run: dotnet run --project app/WriteUp.CoreTests -c Release
+      - run: dotnet run --project app/WriteUp.WindowsTests -c Release
+        timeout-minutes: 3

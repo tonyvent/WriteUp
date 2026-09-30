@@ -3,8 +3,8 @@
 A real, shareable Windows app that records what you do — every click gets an
 annotated screenshot, what you type becomes a step — and turns it into a clean,
 branded write-up. It shows a **live preview** of the report as you go and exports
-to **PDF, Word, HTML, and Markdown**. Built in **C# / .NET 8 WPF**, with a single
-small dependency (the MIT-licensed PDFsharp/MigraDoc) used only for PDF/Word.
+to **PDF, Word, HTML, and Markdown**. Built in **C# / .NET 8 WPF**, with PDFsharp/MigraDoc for document export, System.Speech for local transcription,
+and NAudio for selecting a microphone.
 
 ## Open & run in Visual Studio
 1. Install **Visual Studio 2022** (17.8+) with the **.NET desktop development**
@@ -12,7 +12,7 @@ small dependency (the MIT-licensed PDFsharp/MigraDoc) used only for PDF/Word.
 2. Open `app/WriteUp.sln`.
 3. Press **F5** (Debug) or **Ctrl+F5** (Run without debugging).
 
-The first build restores one NuGet package (`PDFsharp-MigraDoc-WPF`), so an
+The first build restores the export, speech and microphone NuGet packages, so an
 internet connection is needed the first time; after that it builds offline.
 
 > Prefer the command line? From the `app/` folder:
@@ -191,12 +191,12 @@ app/
 
 ## 0.5.0 — capture and editor enhancements
 
-- **Narration:** while recording, click **Microphone off** in the main window or
-  compact bar to turn dictation on. Explain why you are performing each action.
+- **Narration:** narration starts with recording when enabled in Settings.
+  Use the microphone button in the main window or compact bar to pause/restart it. Explain why you are performing each action.
   Recognized phrases are added to the notes of the step active when the phrase
   began; speech before the first action becomes a business-context step. Notes
   autosave and appear in every report format. Click again to stop dictation.
-  This uses the installed Windows speech recognizer and default microphone:
+  This uses the installed Windows speech recognizer and selected microphone:
   install a speech language and allow desktop microphone access if unavailable.
   Recognition happens locally; WriteUp does not save audio or upload it.
 - **Descriptions:** browser documents are no longer classified as text fields.
@@ -252,3 +252,39 @@ existing annotation enum values. GitHub Actions also builds on Windows.
 Before distributing this version, run the [Windows acceptance checks](../docs/WINDOWS-ACCEPTANCE.md)
 with a microphone and mixed-DPI monitors. A successful cross-build is not a live
 capture or speech-recognition test.
+
+
+## 0.5.1 — recording settings and live narration
+
+Open **Settings → Microphone and narration** before recording:
+
+1. Enable **Listen and transcribe automatically when recording starts** (on by default).
+2. Select a microphone and installed Windows speech language.
+3. Click **Test microphone**. Check that the meter moves and your words appear.
+   If needed, use **Windows sound settings** to fix input volume or permissions.
+4. Choose mouse-click, typing, scroll and window-change capture options in
+   **Recording**, then Save and start recording.
+
+During recording, tentative speech appears as **Hearing…**, while finalized
+phrases are appended to the relevant step's notes and autosaved. The main window
+and compact bar both show microphone state, audio level and transcription. Raw
+audio is streamed in memory and not retained. Microphone failure is visible and
+does not prevent screenshot recording. Input-hook failure now aborts startup
+with an error instead of falsely displaying an active recording. Typing/scroll
+bursts flush after an idle interval so they do not wait until Stop to appear.
+
+Settings is resizable and scrollable with Save/Cancel kept outside the scrolling
+content. Main-window headers, step actions, annotation tools and footer actions
+use distinct rows or wrapping panels. The recording controls and live transcript
+stay outside the step list's scrolling area.
+
+Additional Windows checks:
+
+```powershell
+dotnet run --project app/WriteUp.WindowsTests -c Release
+```
+
+This opens an isolated target window, exercises the actual Windows input hooks
+and screenshot capture, and checks visible control intersections at minimum
+window sizes and in scrolled views. It requires an interactive Windows desktop.
+It does not replace a real microphone test or physical mixed-DPI monitor testing.

@@ -31,17 +31,29 @@ public sealed class InputHook : IDisposable
 
     public bool IsRunning => _mouseHook != IntPtr.Zero || _keyboardHook != IntPtr.Zero;
 
-    public void Start()
+    public void Start(bool mouse = true, bool keyboard = true)
     {
         if (IsRunning) return;
         _mouseProc = MouseCallback;
         _keyboardProc = KeyboardCallback;
 
         IntPtr module = NativeMethods.GetModuleHandle(null);
-        _mouseHook = NativeMethods.SetWindowsHookEx(
-            NativeMethods.WH_MOUSE_LL, _mouseProc, module, 0);
-        _keyboardHook = NativeMethods.SetWindowsHookEx(
-            NativeMethods.WH_KEYBOARD_LL, _keyboardProc, module, 0);
+        try
+        {
+            if (mouse)
+            {
+                _mouseHook = NativeMethods.SetWindowsHookEx(NativeMethods.WH_MOUSE_LL, _mouseProc, module, 0);
+                if (_mouseHook == IntPtr.Zero)
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "Windows could not start mouse capture.");
+            }
+            if (keyboard)
+            {
+                _keyboardHook = NativeMethods.SetWindowsHookEx(NativeMethods.WH_KEYBOARD_LL, _keyboardProc, module, 0);
+                if (_keyboardHook == IntPtr.Zero)
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "Windows could not start keyboard capture.");
+            }
+        }
+        catch { Stop(); throw; }
     }
 
     public void Stop()
@@ -140,6 +152,7 @@ public sealed class InputHook : IDisposable
 
     private void HandleKeyDown(int vk, uint scanCode)
     {
+        if (_ctrl || _alt) return;
         switch (vk)
         {
             case NativeMethods.VK_RETURN: SpecialKey?.Invoke("enter"); return;

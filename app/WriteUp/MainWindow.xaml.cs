@@ -243,16 +243,20 @@ public partial class MainWindow : Window
             _sessionDir ??= Path.Combine(root, DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..8]);
             Directory.CreateDirectory(_sessionDir);
 
-            _recorder = new Recorder(Dispatcher, _sessionDir, _settings.MaxImageWidth);
+            _recorder = new Recorder(Dispatcher, _sessionDir, _settings.MaxImageWidth, _settings);
             _recorder.StepAdded += OnStepAdded;
             _recorder.NarrationReady += AttachNarration;
             _recordingStart = DateTime.Now;
-            _recorder.CaptureWarning += message => CaptureStatus.Text = "Capture issue: " + message;
+            _recorder.CaptureWarning += message => _vm.RecordingNotice = "Capture issue: " + message;
             _recorder.Start();
 
             _startTime = DateTime.Now;
             _vm.Elapsed = "00:00";
             _vm.IsRecording = true;
+            _vm.RecordingNotice = "Recording actions. Speak to add business context alongside your steps.";
+            _vm.LiveTranscript = "";
+            if (_settings.NarrationEnabled) StartNarration();
+            else _vm.RecordingNotice = "Recording actions. Microphone is disabled in Settings.";
             _timer.Start();
 
             if (_vm.CompactWhileRecording)
@@ -286,7 +290,7 @@ public partial class MainWindow : Window
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
             foreach (var (at, text) in _pendingNarration) AttachNarration(at, text);
             _pendingNarration.Clear();
-            _vm.MicrophoneLabel = "Microphone off";
+            _vm.MicrophoneLabel = "Microphone off"; _vm.AudioLevel = 0;
             _vm.IsRecording = false;
             _history.Reset(_vm.Steps);
             PersistSettings();
@@ -489,9 +493,13 @@ public partial class MainWindow : Window
 
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
+        if (_vm.IsRecording || _stopping)
+        { MessageBox.Show(this, "Stop recording before changing microphone or recording settings.", "Settings"); return; }
+        _settings.CompactWhileRecording = _vm.CompactWhileRecording;
         var dlg = new SettingsWindow(_settings) { Owner = this };
         if (dlg.ShowDialog() != true) return;
         SettingsStore.Save(_settings);
+        _vm.CompactWhileRecording = _settings.CompactWhileRecording;
         if (dlg.TourRequested) StartTour();
     }
 
@@ -622,34 +630,55 @@ public partial class MainWindow : Window
         NarrateBtn.IsEnabled = false;
         try
         {
+            if (_narration != null && !_narration.IsListening)
+            { _narration.Dispose(); _narration = null; }
             if (_narration != null)
             {
                 await _narration.StopAsync(); _narration = null;
-                _vm.MicrophoneLabel = "Microphone off";
+                _vm.MicrophoneLabel = "Microphone off"; _vm.AudioLevel = 0;
             }
             else
             {
-                var narration = new NarrationService();
-                narration.Transcribed += (at, text) => Dispatcher.BeginInvoke(new Action(() =>
-                {
-                    if (_stopping) _pendingNarration.Add((at, text));
-                    else _recorder?.AddNarration(at, text);
-                    CaptureStatus.Text = "Transcribed: " + text;
-                }));
-                narration.Status += text => Dispatcher.BeginInvoke(new Action(() => CaptureStatus.Text = text));
-                _narration = narration;
-                narration.Start();
-                _vm.MicrophoneLabel = "Microphone ON";
+                StartNarration();
             }
         }
         catch (Exception ex)
         {
             _narration?.Dispose(); _narration = null;
-            _vm.MicrophoneLabel = "Microphone off";
+            _vm.MicrophoneLabel = "Microphone off"; _vm.AudioLevel = 0;
             MessageBox.Show(this, "Could not start narration: " + ex.Message, "Narration");
         }
         finally { NarrateBtn.IsEnabled = true; }
     }
+    private void StartNarration()
+    {
+        var narration = new NarrationService();
+        _narration = narration;
+        void Update(Action action) => Dispatcher.BeginInvoke(new Action(() =>
+        { if (ReferenceEquals(_narration, narration)) action(); }));
+        narration.Transcribed += (at, text) => Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (_stopping) _pendingNarration.Add((at, text));
+            else _recorder?.AddNarration(at, text);
+            _vm.LiveTranscript = "Transcribed: " + text;
+        }));
+        narration.Hypothesis += text => Update(() => { if (text.Length > 0) _vm.LiveTranscript = "Hearing: " + text; });
+        narration.AudioLevel += level => Update(() => _vm.AudioLevel = level);
+        narration.Status += text => Update(() => _vm.RecordingNotice = text);
+        narration.Ended += () => Update(() => { _vm.MicrophoneLabel = "Microphone off"; _vm.AudioLevel = 0; _vm.AudioLevel = 0; });
+        try
+        {
+            narration.Start(_settings);
+            _vm.MicrophoneLabel = "Microphone ON";
+        }
+        catch (Exception ex)
+        {
+            narration.Dispose(); _narration = null;
+            _vm.MicrophoneLabel = "Microphone off"; _vm.AudioLevel = 0;
+            _vm.RecordingNotice = "Screen capture is running. Narration unavailable: " + ex.Message + " Open Settings after stopping to test your microphone.";
+        }
+    }
+
     private void AttachNarration(DateTime at, string text)
     {
         var step = _vm.Steps.Where(s => s.Timestamp >= _recordingStart && s.Timestamp <= at).OrderBy(s => s.Timestamp).LastOrDefault();

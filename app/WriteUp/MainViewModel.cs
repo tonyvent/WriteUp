@@ -19,6 +19,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
         };
     }
 
+    private string _recordingNotice = "Ready. Recording and microphone options are in Settings.";
+    public string RecordingNotice { get => _recordingNotice; set { _recordingNotice = value; OnPropertyChanged(); } }
+    private string _liveTranscript = "";
+    public string LiveTranscript { get => _liveTranscript; set { _liveTranscript = value; OnPropertyChanged(); } }
+    private int _audioLevel;
+    public int AudioLevel { get => _audioLevel; set { _audioLevel = value; OnPropertyChanged(); } }
     private string _microphoneLabel = "Microphone off";
     public string MicrophoneLabel { get => _microphoneLabel; set { _microphoneLabel = value; OnPropertyChanged(); } }
     private bool _isRecording;

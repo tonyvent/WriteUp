@@ -9,6 +9,31 @@ void Check(bool condition, string description)
     passed++;
     Console.WriteLine("PASS " + description);
 }
+var defaults = JsonSerializer.Deserialize<AppSettings>("{}");
+Check(defaults!.NarrationEnabled && defaults.CaptureClicks && defaults.CaptureTyping, "Old settings enable narration and action capture by default");
+var prefs = new AppSettings { MicrophoneDevice = 2, MicrophoneName = "USB microphone", SpeechRecognizerId = "en-US", CaptureTyping = false };
+var prefsAgain = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(prefs))!;
+Check(prefsAgain.MicrophoneDevice == 2 && prefsAgain.MicrophoneName == "USB microphone" && !prefsAgain.CaptureTyping, "Microphone and capture preferences round-trip");
+using (var audio = new MicrophoneStream())
+{
+    var bytes = new byte[4];
+    Check(audio.Read(bytes, 0, 0) == 0, "Zero-length microphone read returns immediately");
+    var pending = Task.Run(() => audio.Read(bytes, 0, bytes.Length));
+    Check(!pending.Wait(30), "Microphone stream waits for real audio instead of generating silence");
+    audio.WriteAudio(new byte[] {1, 2, 3, 4}, 4);
+    Check(pending.Wait(1000) && pending.Result == 4 && bytes.SequenceEqual(new byte[] {1,2,3,4}), "Audio samples reach the speech reader intact");
+    Check(audio.Length == long.MaxValue && audio.Position == 4 && audio.Seek(0, SeekOrigin.Current) == 4, "Live audio supports System.Speech stream metadata queries");
+    var end = Task.Run(() => audio.Read(bytes, 0, 4)); audio.Complete();
+    Check(end.Wait(1000) && end.Result == 0, "Stopping audio unblocks recognition reads with EOF");
+    Check(!audio.WriteAudio(new byte[] {1}, 1), "Late microphone callbacks cannot write after stopping");
+}
+using (var audio = new MicrophoneStream())
+{
+    bool accepted = true;
+    for (int i = 0; i < 100; i++) accepted &= audio.WriteAudio(new byte[] {(byte)i}, 1);
+    Check(accepted, "PCM buffer accepts bounded audio data");
+    Check(!audio.WriteAudio(new byte[] {1}, 1), "Slow speech reader cannot grow microphone memory without bound");
+}
 var a = new Step { Caption = "Open form", ScreenshotPath = "one.png", Notes = "**Check** the account", Level = 0 };
 var b = new Step { Caption = "Approve", SharedImageStepId = a.Id, Marker = "B", Level = 1 };
 var steps = new List<Step> { a, b };

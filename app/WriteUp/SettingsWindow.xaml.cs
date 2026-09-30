@@ -11,6 +11,7 @@ namespace WriteUp;
 public partial class SettingsWindow : Window
 {
     private readonly AppSettings _settings;
+    private NarrationService? _micTest;
 
     /// <summary>Set when the user clicked "Show tour now".</summary>
     public bool TourRequested { get; private set; }
@@ -22,35 +23,50 @@ public partial class SettingsWindow : Window
         TourCheck.IsChecked = settings.ShowGuidedTour;
         CleanupCheck.IsChecked = settings.CleanupSessionsOnExit;
         MaxWidthBox.Text = settings.MaxImageWidth.ToString();
+        NarrationCheck.IsChecked = settings.NarrationEnabled;
+        ClicksCheck.IsChecked = settings.CaptureClicks; TypingCheck.IsChecked = settings.CaptureTyping;
+        ScrollCheck.IsChecked = settings.CaptureScrolling; WindowChangesCheck.IsChecked = settings.CaptureWindowChanges;
+        CompactCheck.IsChecked = settings.CompactWhileRecording;
+        LoadDevices(settings.MicrophoneDevice, settings.SpeechRecognizerId);
+        Closed += (_, _) => { _micTest?.Dispose(); _micTest = null; };
     }
 
     private bool Apply()
     {
-        if (!int.TryParse(MaxWidthBox.Text.Trim(), out int width) || width < 400 || width > 8000)
+        if (!int.TryParse(MaxWidthBox.Text.Trim(), out int width) || (width != 0 && width < 400) || width > 8000)
         {
-            MessageBox.Show(this, "Maximum width must be a number between 400 and 8000.",
+            MessageBox.Show(this, "Maximum width must be 0 (full resolution) or a number between 400 and 8000.",
                 "Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
         _settings.ShowGuidedTour = TourCheck.IsChecked == true;
         _settings.CleanupSessionsOnExit = CleanupCheck.IsChecked == true;
         _settings.MaxImageWidth = width;
+        _settings.NarrationEnabled = NarrationCheck.IsChecked == true;
+        _settings.CaptureClicks = ClicksCheck.IsChecked == true; _settings.CaptureTyping = TypingCheck.IsChecked == true;
+        _settings.CaptureScrolling = ScrollCheck.IsChecked == true; _settings.CaptureWindowChanges = WindowChangesCheck.IsChecked == true;
+        _settings.CompactWhileRecording = CompactCheck.IsChecked == true;
+        var selected = SelectedAudio();
+        _settings.MicrophoneDevice = selected.MicrophoneDevice; _settings.MicrophoneName = selected.MicrophoneName;
+        _settings.SpeechRecognizerId = selected.SpeechRecognizerId;
         return true;
     }
 
-    private void Save_Click(object sender, RoutedEventArgs e)
+    private async void Save_Click(object sender, RoutedEventArgs e)
     {
+        await StopTest();
         if (Apply()) DialogResult = true;
     }
 
-    private void ShowTourNow_Click(object sender, RoutedEventArgs e)
+    private async void ShowTourNow_Click(object sender, RoutedEventArgs e)
     {
+        await StopTest();
         if (!Apply()) return;
         TourRequested = true;
         DialogResult = true;
     }
 
-    private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
+    private async void Cancel_Click(object sender, RoutedEventArgs e) { await StopTest(); DialogResult = false; }
 
     private void SendFeedback_Click(object sender, RoutedEventArgs e)
     {
@@ -88,5 +104,63 @@ public partial class SettingsWindow : Window
             MessageBox.Show(this, "Could not send the report:\n" + ex.Message,
                 "Report a problem", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private AppSettings SelectedAudio() => new()
+    {
+        MicrophoneDevice = (MicrophoneBox.SelectedItem as NarrationService.Microphone)?.Number ?? -1,
+        MicrophoneName = (MicrophoneBox.SelectedItem as NarrationService.Microphone)?.Name ?? "",
+        SpeechRecognizerId = (LanguageBox.SelectedItem as NarrationService.Language)?.Id ?? ""
+    };
+    private void LoadDevices(int device, string language)
+    {
+        try
+        {
+            MicrophoneBox.ItemsSource = NarrationService.Microphones();
+            MicrophoneBox.SelectedItem = MicrophoneBox.Items.Cast<NarrationService.Microphone>().FirstOrDefault(d => d.Number == device);
+            if (MicrophoneBox.SelectedItem == null) MicrophoneBox.SelectedIndex = 0;
+            LanguageBox.ItemsSource = NarrationService.Languages();
+            LanguageBox.SelectedItem = LanguageBox.Items.Cast<NarrationService.Language>().FirstOrDefault(l => l.Id == language);
+            if (LanguageBox.SelectedItem == null && LanguageBox.Items.Count > 0) LanguageBox.SelectedIndex = 0;
+            if (LanguageBox.Items.Count == 0) MicStatus.Text = "No Windows speech recognizer installed. Install a speech language in Windows Settings.";
+        }
+        catch (Exception ex) { MicStatus.Text = "Could not load microphones or speech languages: " + ex.Message; }
+    }
+    private async Task StopTest()
+    {
+        var test = _micTest; _micTest = null;
+        if (test != null) await test.StopAsync();
+        TestMicBtn.Content = "Test microphone"; MicLevel.Value = 0;
+        MicrophoneBox.IsEnabled = LanguageBox.IsEnabled = true;
+    }
+    private async void TestMic_Click(object sender, RoutedEventArgs e)
+    {
+        if (_micTest != null && !_micTest.IsListening) await StopTest();
+        if (_micTest != null) { await StopTest(); return; }
+        var test = new NarrationService(); _micTest = test;
+        void Update(Action action) => Dispatcher.BeginInvoke(new Action(() => { if (ReferenceEquals(_micTest, test)) action(); }));
+        test.Status += text => Update(() => MicStatus.Text = text);
+        test.AudioLevel += level => Update(() => MicLevel.Value = level);
+        test.Hypothesis += text => Update(() => { if (text.Length > 0) TestTranscript.Text = "Hearing: " + text; });
+        test.Transcribed += (_, text) => Update(() => TestTranscript.Text = "Transcribed: " + text);
+        test.Ended += () => Update(() => { TestMicBtn.Content = "Restart microphone test"; MicLevel.Value = 0; });
+        try
+        {
+            TestTranscript.Text = "";
+            test.Start(SelectedAudio());
+            TestMicBtn.Content = "Stop microphone test";
+            MicrophoneBox.IsEnabled = LanguageBox.IsEnabled = false;
+        }
+        catch (Exception ex) { await StopTest(); MicStatus.Text = ex.Message; }
+    }
+    private async void RefreshDevices_Click(object sender, RoutedEventArgs e)
+    {
+        var selected = SelectedAudio(); await StopTest();
+        LoadDevices(selected.MicrophoneDevice, selected.SpeechRecognizerId);
+    }
+    private void SoundSettings_Click(object sender, RoutedEventArgs e)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("ms-settings:sound") { UseShellExecute = true }); }
+        catch (Exception ex) { MicStatus.Text = ex.Message; }
     }
 }
