@@ -29,8 +29,9 @@ internal static class Program
             return 0;
         }
         Directory.CreateDirectory(Temp);
+        SettingsStore.Save(new AppSettings { ShowGuidedTour = false, NarrationEnabled = false });
         var app = new WriteUp.App { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-        app.InitializeComponent(); app.StartupUri = null;
+        app.InitializeComponent();
         app.Dispatcher.InvokeAsync(async () =>
         {
             try { await RunChecks(); }
@@ -44,7 +45,7 @@ internal static class Program
                 }
                 app.Shutdown();
             }
-        });
+        }, DispatcherPriority.ApplicationIdle);
         app.Run();
         try { Directory.Delete(Temp, true); } catch { }
         return _exit;
@@ -106,7 +107,7 @@ internal static class Program
     {
         var settings = new AppSettings { ShowGuidedTour = false, NarrationEnabled = false };
         SettingsStore.Save(settings);
-        var main = new MainWindow();
+        var main = Application.Current.Windows.OfType<MainWindow>().FirstOrDefault() ?? new MainWindow();
         var vm = (MainViewModel)main.DataContext;
         vm.Steps.Add(new Step { Caption = "A long instruction that should wrap without covering the editor buttons.",
             Context = "Long payroll application context", Notes = "A spoken explanation appears alongside this step." });
