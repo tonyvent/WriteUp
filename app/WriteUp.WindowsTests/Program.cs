@@ -105,19 +105,10 @@ internal static class Program
     }
     private static async Task RunChecks()
     {
-        var credential = typeof(NarrationService).Assembly.GetType("WriteUp.Services.SpeechCredential")!;
-        string key = "writeup-test-key-not-a-real-credential";
-        string encrypted = (string)credential.GetMethod("Encrypt")!.Invoke(null, new object[] { key })!;
-        string restored = (string)credential.GetMethod("Decrypt")!.Invoke(null, new object[] { encrypted })!;
-        string json = System.Text.Json.JsonSerializer.Serialize(new AppSettings { AzureSpeechKeyEncrypted = encrypted });
-        if (restored != key || encrypted.Contains(key) || json.Contains(key)) throw new Exception("Speech key was not protected at rest.");
-        Console.WriteLine("PASS Azure Speech key encryption and account-local round-trip");
-        using (var narration = new NarrationService())
-        {
-            try { narration.Start(new AppSettings { TranscriptionProvider = "Azure" }); throw new Exception("Missing Azure credentials were accepted."); }
-            catch (InvalidOperationException) { if (narration.IsListening) throw new Exception("Invalid Azure startup left microphone active."); }
-        }
-        Console.WriteLine("PASS Missing Azure credentials fail before microphone capture");
+        // Enumerating Windows' built-in dictation languages exercises the WinRT projection
+        // without enabling online speech or recording a microphone in CI.
+        var nativeLanguages = Windows.Media.SpeechRecognition.SpeechRecognizer.SupportedTopicLanguages;
+        Console.WriteLine("PASS Windows dictation API loads: " + nativeLanguages.Count + " topic languages");
         var settings = new AppSettings { ShowGuidedTour = false, NarrationEnabled = false };
         SettingsStore.Save(settings);
         var main = Application.Current.Windows.OfType<MainWindow>().FirstOrDefault() ?? new MainWindow();

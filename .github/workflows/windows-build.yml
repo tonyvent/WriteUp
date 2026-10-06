@@ -22,5 +22,20 @@ jobs:
         run: dotnet publish app/WriteUp/WriteUp.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o artifacts/WriteUp
       - uses: actions/upload-artifact@v4
         with:
-          name: WriteUp-0.5.2-Windows-x64
+          name: WriteUp-0.5.3-Portable-Windows-x64
           path: artifacts/WriteUp/
+
+      - name: Build registered Windows dictation app
+        shell: powershell
+        run: ./app/build-windows-app.ps1 -OutputPath artifacts/WindowsApp
+      - name: Validate Windows package manifest
+        shell: powershell
+        run: |
+          $makeappx = Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin/*/x64/makeappx.exe" | Sort-Object FullName | Select-Object -Last 1
+          if (-not $makeappx) { throw "Windows SDK packaging tool unavailable" }
+          & $makeappx.FullName pack /d artifacts/WindowsApp /p artifacts/WriteUp-validation.msix /o
+          if ($LASTEXITCODE -ne 0) { throw "Package validation failed" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WriteUp-0.5.3-Windows-Dictation
+          path: artifacts/WindowsApp/

@@ -306,3 +306,45 @@ Download the Windows x64 artifact from the successful GitHub Actions build.
 See [the acceptance checklist](../docs/WINDOWS-ACCEPTANCE.md) to test the original
 requests and compare the same microphone/script against Teams. Identical Teams
 accuracy is not guaranteed. Live Azure recognition needs a manual resource test.
+
+
+## 0.5.3 — built-in Windows dictation, no key or speech-model download
+
+Azure Speech has been removed. Existing settings migrate to **Windows online
+dictation**, using `Windows.Media.SpeechRecognition` and its continuous dictation
+session. Audio goes to Microsoft's Windows speech service; internet, microphone
+permission and **Online speech recognition** in Windows privacy settings are
+required. No Azure account, API key, paid subscription or separate model is used.
+This is Windows' documented application dictation API; identical accuracy to
+Teams or the Win+H interface is not promised.
+
+Microsoft requires package identity for this API. For development/testing:
+
+1. Close WriteUp and enable **Developer Mode** in Windows Settings.
+2. Run **app/register-windows-app.cmd** from the source checkout. It builds and
+   registers a Windows app layout, then launches it. Alternatively, download the
+   **WriteUp-0.5.3-Windows-Dictation** Actions artifact, extract it to a permanent
+   folder, and run its **register-windows-app.cmd** (no .NET SDK needed).
+3. Launch **WriteUp (Windows dictation)** from Start thereafter. Keep its layout
+   folder in place; rerun registration after updating. No certificate or machine
+   policy is installed/changed by the script. If office policy blocks Developer
+   Mode, distribution requires an appropriately signed MSIX through your IT team.
+4. In Settings select **Windows online dictation**, open **Windows speech
+   settings**, enable Online speech recognition, then check microphone permission.
+5. Set your default input in **Windows sound settings**. Online dictation uses
+   that Windows microphone; the app's per-device selector is for legacy dictation.
+6. Select the available dictation language, test the microphone and start capture.
+   Windows supplies partial/final text; final phrases use Windows' phrase-start
+   timestamps to attach to recorded steps. Stop waits for final recognition.
+
+The portable single EXE and direct Visual Studio launch have no package identity.
+Use **Windows legacy dictation** there, or launch the registered app for online
+recognition. Windows **Win+H** also works directly in a focused editable text field,
+but does not provide automatic background narration while clicking other apps.
+Windows may end a dictation session after prolonged silence; WriteUp displays the
+state and lets you restart via Narrate. No silent switch back to legacy dictation
+occurs if online speech is unavailable.
+
+Validation: Windows compilation, core regression checks, API loading and layout
+checks run in CI. Live online recognition, microphone permissions and the Windows
+service's actual accuracy require testing on a signed-in Windows desktop.

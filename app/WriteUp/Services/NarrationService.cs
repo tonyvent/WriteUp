@@ -5,7 +5,7 @@ using WriteUp.Models;
 
 namespace WriteUp.Services;
 
-/// <summary>Local streaming dictation using the selected Windows recognizer and microphone.</summary>
+/// <summary>Built-in Windows online dictation, with an explicit legacy local fallback.</summary>
 public sealed class NarrationService : IDisposable
 {
     public record Microphone(int Number, string Name) { public override string ToString() => Name; }
@@ -19,7 +19,8 @@ public sealed class NarrationService : IDisposable
     public static List<Language> Languages() => SpeechRecognitionEngine.InstalledRecognizers()
         .Select(r => new Language(r.Id, r.Culture.DisplayName + " — " + r.Name)).ToList();
 
-    private AzureNarration? _azure;
+    private WindowsNarration? _windows;
+    private Task? _startup;
     private SpeechRecognitionEngine? _engine;
     private WaveInEvent? _capture;
     private MicrophoneStream? _stream;
@@ -32,23 +33,26 @@ public sealed class NarrationService : IDisposable
     public event Action<string>? Status;
     public event Action<int>? AudioLevel;
     public event Action? Ended;
-    public bool IsListening => _azure?.IsListening ?? (_engine != null && !_completed && !_stopping);
+    public bool IsListening => _windows?.IsListening ?? (_engine != null && !_completed && !_stopping);
 
-    public void Start(AppSettings? settings = null)
+    public Task StartAsync(AppSettings? settings = null) => _startup ??= StartCoreAsync(settings ?? new AppSettings());
+    private async Task StartCoreAsync(AppSettings settings)
     {
-        if (_engine != null || _azure != null) return;
-        settings ??= new AppSettings();
-        if (settings.TranscriptionProvider == "Azure")
+        if (settings.TranscriptionProvider != "WindowsLegacy")
         {
-            _azure = new AzureNarration();
-            _azure.Transcribed += (at, text) => Transcribed?.Invoke(at, text);
-            _azure.Hypothesis += text => Hypothesis?.Invoke(text);
-            _azure.Status += text => Status?.Invoke(text);
-            _azure.AudioLevel += level => AudioLevel?.Invoke(level);
-            _azure.Ended += () => Ended?.Invoke();
-            try { _azure.Start(settings); } catch { Dispose(); throw; }
+            _windows = new WindowsNarration();
+            _windows.Transcribed += (at, text) => Transcribed?.Invoke(at, text);
+            _windows.Hypothesis += text => Hypothesis?.Invoke(text);
+            _windows.Status += text => Status?.Invoke(text);
+            _windows.AudioLevel += level => AudioLevel?.Invoke(level);
+            _windows.Ended += () => Ended?.Invoke();
+            try { await _windows.StartAsync(settings); } catch { Dispose(); throw; }
             return;
         }
+        StartLegacy(settings);
+    }
+    private void StartLegacy(AppSettings settings)
+    {
         var available = SpeechRecognitionEngine.InstalledRecognizers();
         var recognizer = string.IsNullOrEmpty(settings.SpeechRecognizerId)
             ? available.FirstOrDefault(r => r.Culture.Equals(System.Globalization.CultureInfo.CurrentUICulture)) ?? available.FirstOrDefault()
@@ -117,7 +121,7 @@ public sealed class NarrationService : IDisposable
     public Task StopAsync() => _stopTask ??= StopCoreAsync();
     private async Task StopCoreAsync()
     {
-        if (_azure != null) { await _azure.StopAsync(); Dispose(); return; }
+        if (_windows != null) { await _windows.StopAsync(); Dispose(); return; }
         var engine = _engine;
         if (engine == null) return;
         _stopping = true;
@@ -138,7 +142,7 @@ public sealed class NarrationService : IDisposable
     public void Dispose()
     {
         _stopping = true;
-        _azure?.Dispose(); _azure = null;
+        _windows?.Dispose(); _windows = null;
         var engine = _engine; _engine = null;
         _stream?.Complete(); // unblock the recognizer before waiting for disposal
         try { _capture?.Dispose(); } catch { }

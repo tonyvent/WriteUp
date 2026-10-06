@@ -13,11 +13,13 @@ public class AppSettings
     public bool NarrationEnabled { get; set; } = true;
     public int MicrophoneDevice { get; set; } = -1;
     public string MicrophoneName { get; set; } = "";
-    public string TranscriptionProvider { get; set; } = "Windows";
-    public string AzureSpeechRegion { get; set; } = "";
-    public string AzureSpeechLanguage { get; set; } = "en-US";
-    public string AzureSpeechPhrases { get; set; } = "Dynamic Engineering; Civil 3D; AutoCAD";
-    public string AzureSpeechKeyEncrypted { get; set; } = "";
+    public string TranscriptionProvider { get; set; } = "WindowsOnline";
+    public string WindowsSpeechLanguage { get; set; } = "en-US";
+    public void UpgradeSpeechSettings()
+    {
+        if (TranscriptionProvider != "WindowsLegacy" && TranscriptionProvider != "WindowsOnline")
+            TranscriptionProvider = "WindowsOnline";
+    }
     public string SpeechRecognizerId { get; set; } = "";
     public bool CaptureClicks { get; set; } = true;
     public bool CaptureTyping { get; set; } = true;

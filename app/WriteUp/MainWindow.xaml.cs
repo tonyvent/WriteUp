@@ -231,10 +231,10 @@ public partial class MainWindow : Window
     {
         if (_stopping) return;
         if (_vm.IsRecording) await StopRecording();
-        else StartRecording();
+        else if (!_narrationStarting) await StartRecording();
     }
 
-    private void StartRecording()
+    private async Task StartRecording()
     {
         try
         {
@@ -255,8 +255,9 @@ public partial class MainWindow : Window
             _vm.IsRecording = true;
             _vm.RecordingNotice = "Recording actions. Speak to add business context alongside your steps.";
             _vm.LiveTranscript = "";
-            if (_settings.NarrationEnabled) StartNarration();
+            if (_settings.NarrationEnabled) await StartNarration();
             else _vm.RecordingNotice = "Recording actions. Microphone is disabled in Settings.";
+            if (!_vm.IsRecording || _stopping) return;
             _timer.Start();
 
             if (_vm.CompactWhileRecording)
@@ -626,7 +627,7 @@ public partial class MainWindow : Window
     private void CaptureScreens_Click(object sender, RoutedEventArgs e) => _recorder?.CaptureNow(true);
     private async void Narrate_Click(object sender, RoutedEventArgs e)
     {
-        if (!_vm.IsRecording || _stopping || !NarrateBtn.IsEnabled) return;
+        if (!_vm.IsRecording || _stopping || _narrationStarting || !NarrateBtn.IsEnabled) return;
         NarrateBtn.IsEnabled = false;
         try
         {
@@ -639,7 +640,7 @@ public partial class MainWindow : Window
             }
             else
             {
-                StartNarration();
+                await StartNarration();
             }
         }
         catch (Exception ex)
@@ -650,8 +651,11 @@ public partial class MainWindow : Window
         }
         finally { NarrateBtn.IsEnabled = true; }
     }
-    private void StartNarration()
+    private bool _narrationStarting;
+    private async Task StartNarration()
     {
+        if (_narrationStarting) return;
+        _narrationStarting = true;
         var narration = new NarrationService();
         _narration = narration;
         void Update(Action action) => Dispatcher.BeginInvoke(new Action(() =>
@@ -668,8 +672,8 @@ public partial class MainWindow : Window
         narration.Ended += () => Update(() => { _vm.MicrophoneLabel = "Microphone off"; _vm.AudioLevel = 0; _vm.AudioLevel = 0; });
         try
         {
-            narration.Start(_settings);
-            _vm.MicrophoneLabel = "Microphone ON";
+            await narration.StartAsync(_settings);
+            if (!_stopping && ReferenceEquals(_narration, narration)) _vm.MicrophoneLabel = "Microphone ON";
         }
         catch (Exception ex)
         {
@@ -677,6 +681,7 @@ public partial class MainWindow : Window
             _vm.MicrophoneLabel = "Microphone off"; _vm.AudioLevel = 0;
             _vm.RecordingNotice = "Screen capture is running. Narration unavailable: " + ex.Message + " Open Settings after stopping to test your microphone.";
         }
+        finally { _narrationStarting = false; }
     }
 
     private void AttachNarration(DateTime at, string text)

@@ -37,3 +37,6 @@ Thumbs.db
 
 # WPF intermediate project files
 *_wpftmp.csproj
+
+# Registered Windows app publish layout
+app/windows-app/

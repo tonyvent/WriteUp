@@ -14,10 +14,14 @@ Check(defaults!.NarrationEnabled && defaults.CaptureClicks && defaults.CaptureTy
 var prefs = new AppSettings { MicrophoneDevice = 2, MicrophoneName = "USB microphone", SpeechRecognizerId = "en-US", CaptureTyping = false };
 var prefsAgain = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(prefs))!;
 Check(prefsAgain.MicrophoneDevice == 2 && prefsAgain.MicrophoneName == "USB microphone" && !prefsAgain.CaptureTyping, "Microphone and capture preferences round-trip");
-Check(defaults.TranscriptionProvider == "Windows", "Existing installs retain local dictation without requiring cloud credentials");
-var cloud = new AppSettings { TranscriptionProvider = "Azure", AzureSpeechRegion = "eastus", AzureSpeechLanguage = "en-US", AzureSpeechPhrases = "Civil 3D; Dynamic Engineering", AzureSpeechKeyEncrypted = "encrypted-fixture" };
-var cloudAgain = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(cloud))!;
-Check(cloudAgain.TranscriptionProvider == "Azure" && cloudAgain.AzureSpeechRegion == "eastus" && cloudAgain.AzureSpeechLanguage == "en-US" && cloudAgain.AzureSpeechPhrases == cloud.AzureSpeechPhrases && cloudAgain.AzureSpeechKeyEncrypted == cloud.AzureSpeechKeyEncrypted, "Cloud preferences and encrypted credential round-trip independently of local recognizer");
+Check(defaults.TranscriptionProvider == "WindowsOnline", "New settings use Windows online dictation without cloud credentials");
+var migrated = new AppSettings { TranscriptionProvider = "Azure" }; migrated.UpgradeSpeechSettings();
+Check(migrated.TranscriptionProvider == "WindowsOnline", "Azure settings migrate to built-in Windows dictation");
+var oldSpeech = new AppSettings { TranscriptionProvider = "Windows" }; oldSpeech.UpgradeSpeechSettings();
+Check(oldSpeech.TranscriptionProvider == "WindowsOnline", "Old default upgrades from legacy to Windows online dictation");
+var native = new AppSettings { TranscriptionProvider = "WindowsLegacy", WindowsSpeechLanguage = "en-US" };
+var nativeAgain = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(native))!; nativeAgain.UpgradeSpeechSettings();
+Check(nativeAgain.TranscriptionProvider == "WindowsLegacy" && nativeAgain.WindowsSpeechLanguage == "en-US", "Explicit legacy fallback and language survive restart");
 using (var audio = new MicrophoneStream())
 {
     var bytes = new byte[4];

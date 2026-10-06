@@ -24,16 +24,14 @@ public partial class SettingsWindow : Window
         CleanupCheck.IsChecked = settings.CleanupSessionsOnExit;
         MaxWidthBox.Text = settings.MaxImageWidth.ToString();
         NarrationCheck.IsChecked = settings.NarrationEnabled;
-        ProviderBox.SelectedIndex = settings.TranscriptionProvider == "Azure" ? 1 : 0;
-        AzureRegionBox.Text = settings.AzureSpeechRegion;
-        AzureLanguageBox.Text = settings.AzureSpeechLanguage;
-        AzurePhrasesBox.Text = settings.AzureSpeechPhrases;
-        try { AzureKeyBox.Password = SpeechCredential.Decrypt(settings.AzureSpeechKeyEncrypted); }
-        catch { MicStatus.Text = "Re-enter your Azure key; the saved key belongs to another Windows account or is unreadable."; }
+        settings.UpgradeSpeechSettings();
+        ProviderBox.SelectedIndex = settings.TranscriptionProvider == "WindowsLegacy" ? 1 : 0;
         ClicksCheck.IsChecked = settings.CaptureClicks; TypingCheck.IsChecked = settings.CaptureTyping;
         ScrollCheck.IsChecked = settings.CaptureScrolling; WindowChangesCheck.IsChecked = settings.CaptureWindowChanges;
         CompactCheck.IsChecked = settings.CompactWhileRecording;
-        LoadDevices(settings.MicrophoneDevice, settings.SpeechRecognizerId);
+        LoadDevices(settings.MicrophoneDevice, settings.TranscriptionProvider == "WindowsLegacy" ? settings.SpeechRecognizerId : settings.WindowsSpeechLanguage);
+        ProviderBox.SelectionChanged += Provider_Changed;
+        SetAudioEnabled(true);
         Closed += (_, _) => { _micTest?.Dispose(); _micTest = null; };
     }
 
@@ -46,17 +44,8 @@ public partial class SettingsWindow : Window
             return false;
         }
         var selected = SelectedAudio();
-        if (selected.TranscriptionProvider == "Azure" && NarrationCheck.IsChecked == true &&
-            (string.IsNullOrWhiteSpace(selected.AzureSpeechRegion) || string.IsNullOrWhiteSpace(AzureKeyBox.Password) || string.IsNullOrWhiteSpace(selected.AzureSpeechLanguage)))
-        {
-            MessageBox.Show(this, "Enter your Azure Speech region, key, and language, or select Windows dictation.", "Settings");
-            return false;
-        }
         _settings.TranscriptionProvider = selected.TranscriptionProvider;
-        _settings.AzureSpeechRegion = selected.AzureSpeechRegion;
-        _settings.AzureSpeechLanguage = selected.AzureSpeechLanguage;
-        _settings.AzureSpeechPhrases = selected.AzureSpeechPhrases;
-        _settings.AzureSpeechKeyEncrypted = selected.AzureSpeechKeyEncrypted;
+        _settings.WindowsSpeechLanguage = selected.WindowsSpeechLanguage;
         _settings.ShowGuidedTour = TourCheck.IsChecked == true;
         _settings.CleanupSessionsOnExit = CleanupCheck.IsChecked == true;
         _settings.MaxImageWidth = width;
@@ -125,14 +114,11 @@ public partial class SettingsWindow : Window
 
     private AppSettings SelectedAudio() => new()
     {
-        TranscriptionProvider = (ProviderBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "Windows",
-        AzureSpeechRegion = AzureRegionBox.Text.Trim(),
-        AzureSpeechLanguage = AzureLanguageBox.Text.Trim(),
-        AzureSpeechPhrases = AzurePhrasesBox.Text.Trim(),
-        AzureSpeechKeyEncrypted = SpeechCredential.Encrypt(AzureKeyBox.Password.Trim()),
+        TranscriptionProvider = (ProviderBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "WindowsOnline",
+        WindowsSpeechLanguage = IsOnline ? (LanguageBox.SelectedItem as NarrationService.Language)?.Id ?? "en-US" : _settings.WindowsSpeechLanguage,
         MicrophoneDevice = (MicrophoneBox.SelectedItem as NarrationService.Microphone)?.Number ?? -1,
         MicrophoneName = (MicrophoneBox.SelectedItem as NarrationService.Microphone)?.Name ?? "",
-        SpeechRecognizerId = (LanguageBox.SelectedItem as NarrationService.Language)?.Id ?? ""
+        SpeechRecognizerId = IsOnline ? _settings.SpeechRecognizerId : (LanguageBox.SelectedItem as NarrationService.Language)?.Id ?? ""
     };
     private void LoadDevices(int device, string language)
     {
@@ -141,7 +127,7 @@ public partial class SettingsWindow : Window
             MicrophoneBox.ItemsSource = NarrationService.Microphones();
             MicrophoneBox.SelectedItem = MicrophoneBox.Items.Cast<NarrationService.Microphone>().FirstOrDefault(d => d.Number == device);
             if (MicrophoneBox.SelectedItem == null) MicrophoneBox.SelectedIndex = 0;
-            LanguageBox.ItemsSource = NarrationService.Languages();
+            LanguageBox.ItemsSource = IsOnline ? WindowsNarration.Languages() : NarrationService.Languages();
             LanguageBox.SelectedItem = LanguageBox.Items.Cast<NarrationService.Language>().FirstOrDefault(l => l.Id == language);
             if (LanguageBox.SelectedItem == null && LanguageBox.Items.Count > 0) LanguageBox.SelectedIndex = 0;
             if (LanguageBox.Items.Count == 0) MicStatus.Text = "No Windows speech recognizer installed. Install a speech language in Windows Settings.";
@@ -150,8 +136,8 @@ public partial class SettingsWindow : Window
     }
     private void SetAudioEnabled(bool enabled)
     {
-        MicrophoneBox.IsEnabled = LanguageBox.IsEnabled = ProviderBox.IsEnabled = enabled;
-        AzureRegionBox.IsEnabled = AzureKeyBox.IsEnabled = AzureLanguageBox.IsEnabled = AzurePhrasesBox.IsEnabled = enabled;
+        LanguageBox.IsEnabled = ProviderBox.IsEnabled = enabled;
+        MicrophoneBox.IsEnabled = enabled && !IsOnline;
     }
     private async Task StopTest()
     {
@@ -174,16 +160,30 @@ public partial class SettingsWindow : Window
         try
         {
             TestTranscript.Text = "";
-            test.Start(SelectedAudio());
+            SetAudioEnabled(false); TestMicBtn.IsEnabled = false;
+            await test.StartAsync(SelectedAudio());
             TestMicBtn.Content = "Stop microphone test";
-            SetAudioEnabled(false);
         }
         catch (Exception ex) { await StopTest(); MicStatus.Text = ex.Message; }
+        finally { TestMicBtn.IsEnabled = true; }
     }
     private async void RefreshDevices_Click(object sender, RoutedEventArgs e)
     {
         var selected = SelectedAudio(); await StopTest();
-        LoadDevices(selected.MicrophoneDevice, selected.SpeechRecognizerId);
+        LoadDevices(selected.MicrophoneDevice, IsOnline ? selected.WindowsSpeechLanguage : selected.SpeechRecognizerId);
+    }
+    private bool IsOnline => (ProviderBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() != "WindowsLegacy";
+    private void Provider_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        LoadDevices(_settings.MicrophoneDevice, IsOnline ? _settings.WindowsSpeechLanguage : _settings.SpeechRecognizerId);
+        SetAudioEnabled(true);
+    }
+    private void SpeechSettings_Click(object sender, RoutedEventArgs e) => OpenWindowsSettings("ms-settings:privacy-speech");
+    private void MicrophoneSettings_Click(object sender, RoutedEventArgs e) => OpenWindowsSettings("ms-settings:privacy-microphone");
+    private void OpenWindowsSettings(string uri)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri) { UseShellExecute = true }); }
+        catch (Exception ex) { MicStatus.Text = ex.Message; }
     }
     private void SoundSettings_Click(object sender, RoutedEventArgs e)
     {

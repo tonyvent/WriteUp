@@ -83,3 +83,22 @@ identical Teams accuracy is not guaranteed.
 The Windows workflow publishes a downloadable WriteUp-0.5.2-Windows-x64 artifact
 only after build and regression checks pass. No live Azure accuracy test is run in
 CI; test your own microphone and Speech resource before relying on a guide.
+
+
+## 0.5.3 Windows-only dictation acceptance
+
+- [ ] Register and launch the Windows app layout; confirm the default is Windows online dictation.
+- [ ] No Azure credential inputs, paid provider, or model-download controls remain.
+- [ ] With Online speech recognition disabled, Test microphone shows actionable guidance.
+- [ ] Enable online speech, allow microphone access, select the Windows default input and test.
+- [ ] Speak before and after clicks; confirm partial text, final notes and correct step association.
+- [ ] Switch away from WriteUp to document another app; confirm dictation continues.
+- [ ] Stop during speech and while connecting; confirm no microphone remains active and final notes survive.
+- [ ] Disconnect internet/microphone; screenshots continue and speech failure is visible.
+- [ ] Try repeated starts/stops and microphone tests; no duplicate transcripts or stuck controls.
+- [ ] Confirm Settings stays readable at minimum size and 150%/200% scaling.
+- [ ] Launch the portable EXE: online dictation explains registration requirements; explicitly selected legacy dictation still works.
+
+Windows online-service recognition accuracy is not validated by CI. No model is
+downloaded by WriteUp. Developer registration is for test builds; managed company
+deployment needs signed packaging under the company's normal policy.
