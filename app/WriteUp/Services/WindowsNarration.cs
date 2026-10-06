@@ -28,6 +28,10 @@ internal sealed class WindowsNarration : IDisposable
     public async Task StartAsync(AppSettings settings)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(WindowsNarration));
+        string stage = "initializing the recognizer";
+        string identity;
+        try { identity = Windows.ApplicationModel.Package.Current.Id.Name; }
+        catch { identity = "unpackaged"; }
         try
         {
             var language = string.IsNullOrWhiteSpace(settings.WindowsSpeechLanguage)
@@ -60,10 +64,12 @@ internal sealed class WindowsNarration : IDisposable
                 Ended?.Invoke();
             };
             Status?.Invoke("Connecting to Windows online speech recognition…");
+            stage = "connecting to Windows dictation";
             var compilation = await recognizer.CompileConstraintsAsync().AsTask(_lifetime.Token);
             if (compilation.Status != SpeechRecognitionResultStatus.Success)
                 throw new InvalidOperationException("Windows dictation is unavailable (" + compilation.Status + "). Enable Online speech recognition and microphone access in Windows Settings, and check your internet connection.");
             _lifetime.Token.ThrowIfCancellationRequested();
+            stage = "starting microphone recognition";
             await recognizer.ContinuousRecognitionSession.StartAsync().AsTask(_lifetime.Token);
             _listening = true;
             StartMeter();
@@ -72,7 +78,16 @@ internal sealed class WindowsNarration : IDisposable
         catch (Exception ex)
         {
             Dispose();
-            throw new InvalidOperationException("Windows dictation could not start. Enable Online speech recognition and microphone access in Windows Settings. If Windows reports that package identity is required, launch the registered Windows app (see app/register-windows-app.ps1). Details: " + ex.Message, ex);
+            uint code = unchecked((uint)ex.HResult);
+            string help = code switch
+            {
+                0x80045509 => "Windows has not accepted online speech access. Click Windows speech settings, turn Online speech recognition on, then test again.",
+                0x80070005 => "Windows denied access. Click Microphone permissions and allow microphone access for apps and desktop apps.",
+                _ => "Check Online speech recognition, microphone permissions and the internet connection."
+            };
+            if (identity == "unpackaged")
+                help += " This is the unregistered EXE/Visual Studio launch. Run app\\register-windows-app.cmd, then launch WriteUp (Windows dictation) from Start.";
+            throw new InvalidOperationException($"Windows dictation failed while {stage}. Error 0x{code:X8}. App: {identity}.\n{help}\nWindows detail: {ex.Message}", ex);
         }
     }
     private void StartMeter()
