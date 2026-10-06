@@ -14,6 +14,10 @@ Check(defaults!.NarrationEnabled && defaults.CaptureClicks && defaults.CaptureTy
 var prefs = new AppSettings { MicrophoneDevice = 2, MicrophoneName = "USB microphone", SpeechRecognizerId = "en-US", CaptureTyping = false };
 var prefsAgain = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(prefs))!;
 Check(prefsAgain.MicrophoneDevice == 2 && prefsAgain.MicrophoneName == "USB microphone" && !prefsAgain.CaptureTyping, "Microphone and capture preferences round-trip");
+Check(defaults.TranscriptionProvider == "Windows", "Existing installs retain local dictation without requiring cloud credentials");
+var cloud = new AppSettings { TranscriptionProvider = "Azure", AzureSpeechRegion = "eastus", AzureSpeechLanguage = "en-US", AzureSpeechPhrases = "Civil 3D; Dynamic Engineering", AzureSpeechKeyEncrypted = "encrypted-fixture" };
+var cloudAgain = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(cloud))!;
+Check(cloudAgain.TranscriptionProvider == "Azure" && cloudAgain.AzureSpeechRegion == "eastus" && cloudAgain.AzureSpeechLanguage == "en-US" && cloudAgain.AzureSpeechPhrases == cloud.AzureSpeechPhrases && cloudAgain.AzureSpeechKeyEncrypted == cloud.AzureSpeechKeyEncrypted, "Cloud preferences and encrypted credential round-trip independently of local recognizer");
 using (var audio = new MicrophoneStream())
 {
     var bytes = new byte[4];

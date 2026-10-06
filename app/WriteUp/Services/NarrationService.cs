@@ -19,6 +19,7 @@ public sealed class NarrationService : IDisposable
     public static List<Language> Languages() => SpeechRecognitionEngine.InstalledRecognizers()
         .Select(r => new Language(r.Id, r.Culture.DisplayName + " — " + r.Name)).ToList();
 
+    private AzureNarration? _azure;
     private SpeechRecognitionEngine? _engine;
     private WaveInEvent? _capture;
     private MicrophoneStream? _stream;
@@ -31,12 +32,23 @@ public sealed class NarrationService : IDisposable
     public event Action<string>? Status;
     public event Action<int>? AudioLevel;
     public event Action? Ended;
-    public bool IsListening => _engine != null && !_completed && !_stopping;
+    public bool IsListening => _azure?.IsListening ?? (_engine != null && !_completed && !_stopping);
 
     public void Start(AppSettings? settings = null)
     {
-        if (_engine != null) return;
+        if (_engine != null || _azure != null) return;
         settings ??= new AppSettings();
+        if (settings.TranscriptionProvider == "Azure")
+        {
+            _azure = new AzureNarration();
+            _azure.Transcribed += (at, text) => Transcribed?.Invoke(at, text);
+            _azure.Hypothesis += text => Hypothesis?.Invoke(text);
+            _azure.Status += text => Status?.Invoke(text);
+            _azure.AudioLevel += level => AudioLevel?.Invoke(level);
+            _azure.Ended += () => Ended?.Invoke();
+            try { _azure.Start(settings); } catch { Dispose(); throw; }
+            return;
+        }
         var available = SpeechRecognitionEngine.InstalledRecognizers();
         var recognizer = string.IsNullOrEmpty(settings.SpeechRecognizerId)
             ? available.FirstOrDefault(r => r.Culture.Equals(System.Globalization.CultureInfo.CurrentUICulture)) ?? available.FirstOrDefault()
@@ -105,6 +117,7 @@ public sealed class NarrationService : IDisposable
     public Task StopAsync() => _stopTask ??= StopCoreAsync();
     private async Task StopCoreAsync()
     {
+        if (_azure != null) { await _azure.StopAsync(); Dispose(); return; }
         var engine = _engine;
         if (engine == null) return;
         _stopping = true;
@@ -125,6 +138,7 @@ public sealed class NarrationService : IDisposable
     public void Dispose()
     {
         _stopping = true;
+        _azure?.Dispose(); _azure = null;
         var engine = _engine; _engine = null;
         _stream?.Complete(); // unblock the recognizer before waiting for disposal
         try { _capture?.Dispose(); } catch { }

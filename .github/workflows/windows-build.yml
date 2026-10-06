@@ -17,3 +17,10 @@ jobs:
       - run: dotnet run --project app/WriteUp.CoreTests -c Release
       - run: dotnet run --project app/WriteUp.WindowsTests -c Release
         timeout-minutes: 3
+
+      - name: Publish Windows test build
+        run: dotnet publish app/WriteUp/WriteUp.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o artifacts/WriteUp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WriteUp-0.5.2-Windows-x64
+          path: artifacts/WriteUp/

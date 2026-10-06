@@ -50,3 +50,36 @@ These are manual hardware/UI checks, not claims of completed validation.
     transcripts, and scroll. Check Save/Cancel, start/stop, microphone controls and
     all annotation tools remain reachable and do not overlap text. Repeat at
     150% and 200% display scaling.
+
+
+## 0.5.2 Microsoft Azure Speech acceptance
+
+Use Settings > Microphone and narration > Microsoft Azure Speech (cloud).
+Expand Azure Speech connection and enter the region and key of an Azure Speech
+resource, language code (for example en-US), and semicolon-separated vocabulary
+hints. The key is encrypted for the current Windows account using DPAPI.
+Audio is sent to Azure; internet access and an Azure resource are required, and
+usage charges may apply. Windows dictation remains available without Azure.
+This integrates Microsoft's public Speech SDK, not Teams' internal configuration;
+identical Teams accuracy is not guaranteed.
+
+- [ ] Provider, microphone, language and vocabulary persist after restarting.
+- [ ] Test microphone shows a live level, partial text, then finalized text.
+- [ ] A normal sentence with short pauses remains understandable and complete.
+- [ ] Compare the same spoken script and microphone with Teams, including office terminology.
+- [ ] Narration captures why the action is needed and what the reader should check.
+- [ ] Narration before/after clicking attaches to the correct action or screenshot.
+- [ ] Stop while speaking: final buffered narration is retained, or an explicit timeout appears.
+- [ ] Wrong key/region, lost internet and disconnected microphone produce useful status; screenshots continue.
+- [ ] Restart narration after a failure or completed microphone test.
+- [ ] Windows dictation still works with cloud provider disabled.
+- [ ] Correct button/field descriptions replace repeated incorrect labels such as Carmine.
+- [ ] Multiple instructions can share a screenshot and survive save/reopen/export.
+- [ ] Mouse clicks, typing, scroll and window-change capture settings work individually.
+- [ ] Start/stop and manual screenshot shortcuts work.
+- [ ] All windows remain readable with no overlapping controls at 100%, 125%, 150% and 200% scaling.
+- [ ] Exported instructions and narration preserve the spoken business meaning.
+
+The Windows workflow publishes a downloadable WriteUp-0.5.2-Windows-x64 artifact
+only after build and regression checks pass. No live Azure accuracy test is run in
+CI; test your own microphone and Speech resource before relying on a guide.

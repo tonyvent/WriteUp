@@ -288,3 +288,21 @@ This opens an isolated target window, exercises the actual Windows input hooks
 and screenshot capture, and checks visible control intersections at minimum
 window sizes and in scrolled views. It requires an interactive Windows desktop.
 It does not replace a real microphone test or physical mixed-DPI monitor testing.
+
+
+## 0.5.2 - Microsoft Azure Speech
+
+Settings now supports Windows dictation (local) or Microsoft Azure Speech (cloud).
+For Azure, expand the connection settings and enter your Speech resource region,
+key, language code, and optional semicolon-separated vocabulary hints. Use Test
+microphone before recording. Keys are protected with Windows DPAPI for your
+Windows account. Azure requires internet and your own Speech resource, with
+usage billing; it does not use a Teams subscription. Existing installs retain
+Windows dictation until you select Azure. Screenshot recording continues if
+transcription fails. Partial captions, final phrase timestamps, microphone level,
+and an end-of-stream drain connect narration to existing recorded steps.
+
+Download the Windows x64 artifact from the successful GitHub Actions build.
+See [the acceptance checklist](../docs/WINDOWS-ACCEPTANCE.md) to test the original
+requests and compare the same microphone/script against Teams. Identical Teams
+accuracy is not guaranteed. Live Azure recognition needs a manual resource test.
