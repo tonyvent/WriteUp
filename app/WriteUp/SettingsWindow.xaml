@@ -32,17 +32,22 @@
                     <ComboBoxItem Content="Windows legacy dictation (offline)" Tag="WindowsLegacy"/>
                 </ComboBox>
                 <TextBlock Text="Uses speech recognition supplied by Windows. No Azure key, subscription or separate model download. Online dictation sends speech to Microsoft's Windows service and requires internet and Online speech recognition enabled." TextWrapping="Wrap" Margin="0,0,0,8"/>
-                <TextBlock Text="Online dictation uses the Windows default microphone. Choose that input in Windows sound settings. Automatic online dictation requires the registered Windows app build; the portable build supports legacy dictation." TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <TextBlock Text="Choose the microphone you want below. Windows online dictation requires that device to also be the Windows default input and communications input. WriteUp checks this before starting; it does not silently change Windows settings." TextWrapping="Wrap" Margin="0,0,0,8"/>
                 <WrapPanel>
                     <Button Content="Windows speech settings" Click="SpeechSettings_Click" Margin="0,0,8,8"/>
                     <Button Content="Microphone permissions" Click="MicrophoneSettings_Click" Margin="0,0,0,8"/>
                 </WrapPanel>
-                <TextBlock Text="Microphone (legacy dictation only)" Margin="0,4,0,4"/>
+                <TextBlock Text="Microphone" Margin="0,4,0,4"/>
                 <ComboBox x:Name="MicrophoneBox" Margin="0,0,0,10"/>
+                <TextBlock x:Name="InputRouting" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <WrapPanel>
+                    <Button x:Name="InputTestBtn" Content="Test selected input level" Click="InputTest_Click" Margin="0,0,8,8"/>
+                    <Button Content="Windows input selection" Click="InputSelection_Click" Margin="0,0,0,8"/>
+                </WrapPanel>
                 <TextBlock Text="Dictation language" Margin="0,4,0,4"/>
                 <ComboBox x:Name="LanguageBox" Margin="0,0,0,10"/>
                 <WrapPanel>
-                    <Button x:Name="TestMicBtn" Content="Test microphone" Click="TestMic_Click" Margin="0,0,8,8"/>
+                    <Button x:Name="TestMicBtn" Content="Test transcription" Click="TestMic_Click" Margin="0,0,8,8"/>
                     <Button Content="Refresh devices" Click="RefreshDevices_Click" Margin="0,0,8,8"/>
                     <Button Content="Windows sound settings" Click="SoundSettings_Click" Margin="0,0,8,8"/>
                 </WrapPanel>

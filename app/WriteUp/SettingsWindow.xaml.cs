@@ -12,6 +12,7 @@ public partial class SettingsWindow : Window
 {
     private readonly AppSettings _settings;
     private NarrationService? _micTest;
+    private MicrophoneLevelTest? _inputTest;
 
     /// <summary>Set when the user clicked "Show tour now".</summary>
     public bool TourRequested { get; private set; }
@@ -32,7 +33,7 @@ public partial class SettingsWindow : Window
         LoadDevices(settings.MicrophoneDevice, settings.TranscriptionProvider == "WindowsLegacy" ? settings.SpeechRecognizerId : settings.WindowsSpeechLanguage);
         ProviderBox.SelectionChanged += Provider_Changed;
         SetAudioEnabled(true);
-        Closed += (_, _) => { _micTest?.Dispose(); _micTest = null; };
+        Closed += (_, _) => { _inputTest?.Dispose(); _inputTest = null; _micTest?.Dispose(); _micTest = null; };
     }
 
     private bool Apply()
@@ -46,6 +47,8 @@ public partial class SettingsWindow : Window
         var selected = SelectedAudio();
         _settings.TranscriptionProvider = selected.TranscriptionProvider;
         _settings.WindowsSpeechLanguage = selected.WindowsSpeechLanguage;
+        _settings.WindowsMicrophoneId = selected.WindowsMicrophoneId;
+        _settings.WindowsMicrophoneName = selected.WindowsMicrophoneName;
         _settings.ShowGuidedTour = TourCheck.IsChecked == true;
         _settings.CleanupSessionsOnExit = CleanupCheck.IsChecked == true;
         _settings.MaxImageWidth = width;
@@ -116,17 +119,33 @@ public partial class SettingsWindow : Window
     {
         TranscriptionProvider = (ProviderBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "WindowsOnline",
         WindowsSpeechLanguage = IsOnline ? (LanguageBox.SelectedItem as NarrationService.Language)?.Id ?? "en-US" : _settings.WindowsSpeechLanguage,
-        MicrophoneDevice = (MicrophoneBox.SelectedItem as NarrationService.Microphone)?.Number ?? -1,
-        MicrophoneName = (MicrophoneBox.SelectedItem as NarrationService.Microphone)?.Name ?? "",
+        WindowsMicrophoneId = IsOnline ? (MicrophoneBox.SelectedItem as WindowsMicrophones.Input)?.Id ?? "" : _settings.WindowsMicrophoneId,
+        WindowsMicrophoneName = IsOnline ? (MicrophoneBox.SelectedItem as WindowsMicrophones.Input)?.Name ?? "" : _settings.WindowsMicrophoneName,
+        MicrophoneDevice = IsOnline ? _settings.MicrophoneDevice : (MicrophoneBox.SelectedItem as NarrationService.Microphone)?.Number ?? -1,
+        MicrophoneName = IsOnline ? _settings.MicrophoneName : (MicrophoneBox.SelectedItem as NarrationService.Microphone)?.Name ?? "",
         SpeechRecognizerId = IsOnline ? _settings.SpeechRecognizerId : (LanguageBox.SelectedItem as NarrationService.Language)?.Id ?? ""
     };
-    private void LoadDevices(int device, string language)
+    private void LoadDevices(int device, string language, string? endpoint = null)
     {
         try
         {
-            MicrophoneBox.ItemsSource = NarrationService.Microphones();
-            MicrophoneBox.SelectedItem = MicrophoneBox.Items.Cast<NarrationService.Microphone>().FirstOrDefault(d => d.Number == device);
-            if (MicrophoneBox.SelectedItem == null) MicrophoneBox.SelectedIndex = 0;
+            if (IsOnline)
+            {
+                string id = endpoint ?? _settings.WindowsMicrophoneId;
+                if (string.IsNullOrEmpty(id)) id = WindowsMicrophones.Default(NAudio.CoreAudioApi.Role.Console)?.Id ?? "";
+                var inputs = WindowsMicrophones.List();
+                if (id.Length > 0 && !inputs.Any(d => d.Id == id))
+                    inputs.Add(new WindowsMicrophones.Input(id, "Unavailable: " + _settings.WindowsMicrophoneName));
+                MicrophoneBox.ItemsSource = inputs;
+                MicrophoneBox.SelectedItem = inputs.FirstOrDefault(d => d.Id == id);
+            }
+            else
+            {
+                MicrophoneBox.ItemsSource = NarrationService.Microphones();
+                MicrophoneBox.SelectedItem = MicrophoneBox.Items.Cast<NarrationService.Microphone>().FirstOrDefault(d => d.Number == device);
+                if (MicrophoneBox.SelectedItem == null) MicrophoneBox.SelectedIndex = 0;
+            }
+            InputRouting.Text = WindowsMicrophones.RoutingDescription();
             LanguageBox.ItemsSource = IsOnline ? WindowsNarration.Languages() : NarrationService.Languages();
             LanguageBox.SelectedItem = LanguageBox.Items.Cast<NarrationService.Language>().FirstOrDefault(l => l.Id == language);
             if (LanguageBox.SelectedItem == null && LanguageBox.Items.Count > 0) LanguageBox.SelectedIndex = 0;
@@ -137,19 +156,22 @@ public partial class SettingsWindow : Window
     private void SetAudioEnabled(bool enabled)
     {
         LanguageBox.IsEnabled = ProviderBox.IsEnabled = enabled;
-        MicrophoneBox.IsEnabled = enabled && !IsOnline;
+        MicrophoneBox.IsEnabled = enabled;
+        InputTestBtn.IsEnabled = enabled && IsOnline;
     }
     private async Task StopTest()
     {
+        _inputTest?.Dispose(); _inputTest = null; InputTestBtn.Content = "Test selected input level";
         var test = _micTest; _micTest = null;
         if (test != null) await test.StopAsync();
-        TestMicBtn.Content = "Test microphone"; MicLevel.Value = 0;
+        TestMicBtn.Content = "Test transcription"; MicLevel.Value = 0;
         SetAudioEnabled(true);
     }
     private async void TestMic_Click(object sender, RoutedEventArgs e)
     {
         if (_micTest != null && !_micTest.IsListening) await StopTest();
         if (_micTest != null) { await StopTest(); return; }
+        await StopTest();
         var test = new NarrationService(); _micTest = test;
         void Update(Action action) => Dispatcher.BeginInvoke(new Action(() => { if (ReferenceEquals(_micTest, test)) action(); }));
         test.Status += text => Update(() => MicStatus.Text = text);
@@ -170,7 +192,28 @@ public partial class SettingsWindow : Window
     private async void RefreshDevices_Click(object sender, RoutedEventArgs e)
     {
         var selected = SelectedAudio(); await StopTest();
-        LoadDevices(selected.MicrophoneDevice, IsOnline ? selected.WindowsSpeechLanguage : selected.SpeechRecognizerId);
+        LoadDevices(selected.MicrophoneDevice, IsOnline ? selected.WindowsSpeechLanguage : selected.SpeechRecognizerId, selected.WindowsMicrophoneId);
+    }
+    private async void InputTest_Click(object sender, RoutedEventArgs e)
+    {
+        if (_inputTest != null) { await StopTest(); return; }
+        await StopTest();
+        if (MicrophoneBox.SelectedItem is not WindowsMicrophones.Input input) { MicStatus.Text = "Select an available microphone first."; return; }
+        var test = new MicrophoneLevelTest(); _inputTest = test;
+        test.Level += level => Dispatcher.BeginInvoke(new Action(() => { if (ReferenceEquals(_inputTest, test)) MicLevel.Value = level; }));
+        test.Failed += error => Dispatcher.BeginInvoke(new Action(async () => { if (ReferenceEquals(_inputTest, test)) { await StopTest(); MicStatus.Text = "Input test failed: " + error; } }));
+        try
+        {
+            test.Start(input.Id); SetAudioEnabled(false); InputTestBtn.IsEnabled = true;
+            InputTestBtn.Content = "Stop input test";
+            MicStatus.Text = "Testing " + input.Name + ". Speak and check the meter. This tests the selected hardware, not speech recognition.";
+        }
+        catch (Exception ex) { await StopTest(); MicStatus.Text = "Could not open selected microphone: " + ex.Message; }
+    }
+    private void InputSelection_Click(object sender, RoutedEventArgs e)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("control.exe", "mmsys.cpl,,1") { UseShellExecute = true }); }
+        catch (Exception ex) { MicStatus.Text = ex.Message; }
     }
     private bool IsOnline => (ProviderBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() != "WindowsLegacy";
     private void Provider_Changed(object sender, SelectionChangedEventArgs e)

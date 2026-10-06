@@ -37,6 +37,8 @@ internal sealed class WindowsNarration : IDisposable
         catch { identity = "unpackaged"; }
         try
         {
+            stage = "checking the selected microphone";
+            WindowsMicrophones.RequireSelected(settings.WindowsMicrophoneId);
             stage = "checking microphone permission and availability";
             // Follow the Windows sample: request/check audio access, then release
             // the capture device before opening the speech recognizer.

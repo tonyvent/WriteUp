@@ -14,6 +14,8 @@ public class AppSettings
     public int MicrophoneDevice { get; set; } = -1;
     public string MicrophoneName { get; set; } = "";
     public string TranscriptionProvider { get; set; } = "WindowsOnline";
+    public string WindowsMicrophoneId { get; set; } = "";
+    public string WindowsMicrophoneName { get; set; } = "";
     public string WindowsSpeechLanguage { get; set; } = "en-US";
     public void UpgradeSpeechSettings()
     {

@@ -348,3 +348,18 @@ occurs if online speech is unavailable.
 Validation: Windows compilation, core regression checks, API loading and layout
 checks run in CI. Live online recognition, microphone permissions and the Windows
 service's actual accuracy require testing on a signed-in Windows desktop.
+
+### Choosing and checking a microphone
+
+Settings now lists named Windows capture devices for online dictation and remembers
+an endpoint ID, rather than just a generic default label. **Test selected input
+level** opens that exact device directly and works independently of the speech
+service. **Test transcription** separately checks Windows dictation.
+
+The Windows dictation API has no per-app microphone argument. **Windows input
+selection** opens the Recording control panel: set the selected device as both
+Default Device and Default Communications Device, then click Refresh devices.
+WriteUp displays both Windows routes and refuses to start online narration when
+they differ from your selected device. It does not change system defaults for you.
+A disconnected saved device remains marked unavailable instead of silently falling
+back to another mic. Legacy Windows dictation retains direct per-device selection.
