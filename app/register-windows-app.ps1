@@ -1,9 +1,19 @@
 # Development registration gives Windows dictation the package identity it requires.
 # It does not install certificates, change Windows policy, or download speech models.
 $ErrorActionPreference = 'Stop'
-$developerMode = Get-ItemPropertyValue 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' 'AllowDevelopmentWithoutDevLicense' -ErrorAction SilentlyContinue
+$developerMode = 0
+try {
+    $developerSettings = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' -ErrorAction Stop
+    $developerProperty = $developerSettings.PSObject.Properties['AllowDevelopmentWithoutDevLicense']
+    if ($null -ne $developerProperty) { $developerMode = $developerProperty.Value }
+} catch {
+    # A missing key/value is normal when Developer Mode has never been enabled.
+    $developerMode = 0
+}
 if ($developerMode -ne 1) {
-    throw 'For this test build, enable Developer Mode in Windows Settings > System > For developers, then run this script again. This script does not change that setting.'
+    Write-Host 'Developer Mode is not enabled. Opening Windows settings...' -ForegroundColor Yellow
+    try { Start-Process 'ms-settings:developers' } catch { }
+    throw 'Turn on Developer Mode in Windows Settings, then rerun register-windows-app.cmd. If your organization controls this setting, ask IT about installing the Windows app. This script does not change Windows policy.'
 }
 if (Get-Process -Name WriteUp -ErrorAction SilentlyContinue) { throw 'Close WriteUp before registering or updating the Windows app.' }
 if (Test-Path (Join-Path $PSScriptRoot 'AppxManifest.xml')) {
