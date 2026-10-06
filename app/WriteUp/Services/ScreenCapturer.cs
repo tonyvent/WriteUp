@@ -3,7 +3,6 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
-using FormsScreen = System.Windows.Forms.Screen;
 
 namespace WriteUp.Services;
 
@@ -24,6 +23,7 @@ public static class ScreenCapturer
     {
         Directory.CreateDirectory(dir);
 
+        using var dpi = new DpiScope();
         var spot = new Point(globalX, globalY);
         Rectangle mon = MonitorBoundsFor(spot);
         int lx = spot.X - mon.Left;
@@ -54,7 +54,7 @@ public static class ScreenCapturer
         using (var g = Graphics.FromImage(full))
             DrawPointer(g, lx, ly);
 
-        string stamp = $"{DateTime.Now:HHmmss_fff}";
+        string stamp = Guid.NewGuid().ToString("N");
         string basePath = Path.Combine(dir, stamp + ".png");
         string zoomPath = Path.Combine(dir, stamp + "_zoom.png");
         SaveScaled(full, basePath, maxWidth);
@@ -64,20 +64,26 @@ public static class ScreenCapturer
 
     /// <summary>Capture the monitor the cursor is currently on, for notes and
     /// typing steps. Marks the pointer but adds no zoom inset.</summary>
-    public static string CaptureContext(string dir, int maxWidth)
+    public static string CaptureContext(string dir, int maxWidth, IntPtr window = default, bool allScreens = false)
     {
         Directory.CreateDirectory(dir);
 
+        using var dpi = new DpiScope();
         Point spot = CursorPos();
-        Rectangle mon = MonitorBoundsFor(spot);
+        if (window != IntPtr.Zero && NativeMethods.GetWindowRect(window, out var wr))
+            spot = new Point(wr.Left + (wr.Right - wr.Left) / 2, wr.Top + (wr.Bottom - wr.Top) / 2);
+        Rectangle mon = allScreens
+            ? new Rectangle(NativeMethods.GetSystemMetrics(76), NativeMethods.GetSystemMetrics(77),
+                NativeMethods.GetSystemMetrics(78), NativeMethods.GetSystemMetrics(79))
+            : MonitorBoundsFor(spot);
         using var full = new Bitmap(mon.Width, mon.Height, PixelFormat.Format24bppRgb);
         using (var g = Graphics.FromImage(full))
         {
             g.CopyFromScreen(mon.Left, mon.Top, 0, 0, mon.Size, CopyPixelOperation.SourceCopy);
-            DrawPointer(g, spot.X - mon.Left, spot.Y - mon.Top);
+
         }
 
-        string path = Path.Combine(dir, $"{DateTime.Now:HHmmss_fff}.png");
+        string path = Path.Combine(dir, $"{Guid.NewGuid():N}.png");
         SaveScaled(full, path, maxWidth);
         return path;
     }
@@ -104,19 +110,11 @@ public static class ScreenCapturer
 
     private static Rectangle MonitorBoundsFor(Point p)
     {
-        try
-        {
-            var b = FormsScreen.FromPoint(p).Bounds;
-            if (b.Width > 0 && b.Height > 0) return b;
-        }
-        catch { /* fall through */ }
-        try
-        {
-            var b = FormsScreen.PrimaryScreen?.Bounds ?? Rectangle.Empty;
-            if (b.Width > 0 && b.Height > 0) return b;
-        }
-        catch { /* fall through */ }
-        return new Rectangle(0, 0, 1920, 1080);
+        var handle = NativeMethods.MonitorFromPoint(new NativeMethods.POINT { x = p.X, y = p.Y }, 2);
+        var info = new NativeMethods.MONITORINFO { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MONITORINFO>() };
+        if (!NativeMethods.GetMonitorInfo(handle, ref info))
+            throw new InvalidOperationException("Cannot read the target monitor geometry.");
+        return Rectangle.FromLTRB(info.Monitor.Left, info.Monitor.Top, info.Monitor.Right, info.Monitor.Bottom);
     }
 
     private static Point CursorPos()

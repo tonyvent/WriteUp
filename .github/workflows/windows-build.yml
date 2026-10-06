@@ -1,0 +1,34 @@
+name: Windows build and core regression checks
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - run: dotnet build app/WriteUp/WriteUp.csproj -c Release
+      - run: dotnet run --project app/WriteUp.CoreTests -c Release
+      - run: dotnet run --project app/WriteUp.WindowsTests -c Release
+        timeout-minutes: 3
+
+      - name: Build registered Windows offline speech app
+        shell: powershell
+        run: ./app/build-windows-app.ps1 -OutputPath artifacts/WindowsApp
+      - name: Validate Windows package manifest
+        shell: powershell
+        run: |
+          $makeappx = Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin/*/x64/makeappx.exe" | Sort-Object FullName | Select-Object -Last 1
+          if (-not $makeappx) { throw "Windows SDK packaging tool unavailable" }
+          & $makeappx.FullName pack /d artifacts/WindowsApp /p artifacts/WriteUp-validation.msix /o
+          if ($LASTEXITCODE -ne 0) { throw "Package validation failed" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WriteUp-0.5.4-Windows-Offline-Speech
+          path: artifacts/WindowsApp/

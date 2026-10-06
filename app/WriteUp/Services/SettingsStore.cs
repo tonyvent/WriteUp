@@ -42,6 +42,7 @@ public static class SettingsStore
                 var s = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath));
                 if (s != null)
                 {
+                    s.UpgradeSpeechSettings();
                     if (string.IsNullOrWhiteSpace(s.OutputDir)) s.OutputDir = DefaultSessionsDir;
                     return s;
                 }

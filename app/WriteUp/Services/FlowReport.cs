@@ -66,6 +66,7 @@ public static class FlowReport
             doc.Blocks.Add(mp);
         }
 
+        var numbers = StepText.Numbers(steps);
         int n = 0;
         string? current = null;
         foreach (var s in steps)
@@ -78,9 +79,12 @@ public static class FlowReport
             }
 
             n++;
-            var sp = new Paragraph { Margin = new Thickness(0, 6, 0, 0), Tag = s };  // Tag links back to the step
-            sp.Inlines.Add(new Run(n + ".  ") { FontWeight = FontWeights.Bold });
-            sp.Inlines.Add(new Run(s.Caption));
+            var sp = new Paragraph { Margin = new Thickness(s.Level * 20, 6, 0, 0), Tag = s, Name = "step_" + s.Id };  // Tag links back to the step
+            sp.Inlines.Add(new Run(numbers[s.Id] + ".  ") { FontWeight = FontWeights.Bold });
+            AddText(sp, StepText.ResolveReferences(s.Caption, numbers));
+            if (!string.IsNullOrWhiteSpace(s.Notes)) { sp.Inlines.Add(new LineBreak()); AddText(sp, StepText.ResolveReferences(s.Notes, numbers)); }
+            string reference = StepText.Reference(s, numbers);
+            if (reference.Length > 0) { sp.Inlines.Add(new LineBreak()); AddText(sp, reference); }
             doc.Blocks.Add(sp);
 
             var bmp = LoadImage(s.ImagePath, 720);
@@ -97,6 +101,28 @@ public static class FlowReport
             { Foreground = Muted, FontStyle = FontStyles.Italic, Margin = new Thickness(0, 8, 0, 0) });
 
         return doc;
+    }
+
+    private static void AddText(Paragraph p, string text)
+    {
+        foreach (var span in StepText.Parse(text))
+        {
+            var run = new Run(span.Text) { FontWeight = span.Bold ? FontWeights.Bold : FontWeights.Normal,
+                FontStyle = span.Italic ? FontStyles.Italic : FontStyles.Normal };
+            if (span.Link == null) { p.Inlines.Add(run); continue; }
+            var link = new Hyperlink(run);
+            link.Click += (_, _) =>
+            {
+                if (span.Link.StartsWith("#step-"))
+                {
+                    if (p.Parent is FlowDocument document)
+                        foreach (var block in document.Blocks)
+                            if (block is Paragraph target && target.Name == span.Link[1..].Replace('-', '_')) target.BringIntoView();
+                }
+                else try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(span.Link) { UseShellExecute = true }); } catch { }
+            };
+            p.Inlines.Add(link);
+        }
     }
 
     private static Block Rule()

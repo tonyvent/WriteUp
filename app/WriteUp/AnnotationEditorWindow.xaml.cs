@@ -49,6 +49,24 @@ public partial class AnnotationEditorWindow : Window
     private bool _showZoom;
     private bool _suppressZoomToggle;
 
+    private readonly List<string> _history = new();
+    private int _historyIndex = -1;
+    private void Checkpoint()
+    {
+        string state = System.Text.Json.JsonSerializer.Serialize(_annotations);
+        if (_historyIndex >= 0 && state == _history[_historyIndex]) return;
+        _history.RemoveRange(_historyIndex + 1, _history.Count - _historyIndex - 1);
+        _history.Add(state);
+        if (_history.Count > 200) _history.RemoveAt(0);
+        _historyIndex = _history.Count - 1;
+    }
+    private void RestoreAnnotations(int index)
+    {
+        if (index < 0 || index >= _history.Count) return;
+        _historyIndex = index;
+        _annotations = System.Text.Json.JsonSerializer.Deserialize<List<Annotation>>(_history[index])!;
+        Select(null);
+    }
     private Annotation? _selected;
     private Annotation? _draft;
     private DragMode _drag = DragMode.None;
@@ -85,6 +103,7 @@ public partial class AnnotationEditorWindow : Window
 
         LoadBaseImage();
         Select(null);
+        Checkpoint();
 
         PreviewKeyDown += OnPreviewKeyDown;
         Loaded += (_, _) => RebuildInk();
@@ -122,6 +141,7 @@ public partial class AnnotationEditorWindow : Window
     // ---- tool / color state --------------------------------------------------
 
     private AnnotationKind? CurrentTool =>
+        ToolNumbers.IsChecked == true || ToolLetters.IsChecked == true ? AnnotationKind.Badge :
         ToolArrow.IsChecked == true ? AnnotationKind.Arrow :
         ToolBox.IsChecked == true ? AnnotationKind.Box :
         ToolCallout.IsChecked == true ? AnnotationKind.Callout :
@@ -176,6 +196,8 @@ public partial class AnnotationEditorWindow : Window
             Kind = tool.Value,
             X1 = p.X, Y1 = p.Y, X2 = p.X, Y2 = p.Y,
             ColorHex = tool.Value is AnnotationKind.Blur or AnnotationKind.Redact ? "#1A1A1A" : CurrentColorHex,
+            Text = tool.Value == AnnotationKind.Badge
+                ? (ToolLetters.IsChecked == true ? LetterLabel(_annotations.Count(a => a.Kind == AnnotationKind.Badge)) : (_annotations.Count(a => a.Kind == AnnotationKind.Badge) + 1).ToString()) : "",
             StrokeWidth = _defaultStroke
         };
         _drag = DragMode.Drawing;
@@ -222,14 +244,14 @@ public partial class AnnotationEditorWindow : Window
         _drag = DragMode.None;
         _activeHandle = null;
 
-        if (mode != DragMode.Drawing || _draft == null) return;
+        if (mode != DragMode.Drawing || _draft == null) { Checkpoint(); return; }
         var a = _draft;
         _draft = null;
 
         bool keep = a.Kind switch
         {
             AnnotationKind.Arrow => Distance(a.X1, a.Y1, a.X2, a.Y2) >= 8,
-            AnnotationKind.Callout => true,
+            AnnotationKind.Callout or AnnotationKind.Badge => true,
             _ => a.Width >= 5 && a.Height >= 5
         };
         if (!keep) { RebuildInk(); return; }
@@ -242,11 +264,19 @@ public partial class AnnotationEditorWindow : Window
         }
 
         _annotations.Add(a);
+        Checkpoint();
         Select(a);
         RebuildInk();
 
         if (a.Kind == AnnotationKind.Callout)
             CalloutTextBox.Focus();
+    }
+
+    private static string LetterLabel(int index)
+    {
+        string label = "";
+        for (int n = index + 1; n > 0; n = (n - 1) / 26) label = (char)('A' + (n - 1) % 26) + label;
+        return label;
     }
 
     private static double Distance(double x1, double y1, double x2, double y2) =>
@@ -259,7 +289,7 @@ public partial class AnnotationEditorWindow : Window
         _selected = a;
         DeleteBtn.IsEnabled = a != null;
 
-        bool isCallout = a?.Kind == AnnotationKind.Callout;
+        bool isCallout = a?.Kind is AnnotationKind.Callout or AnnotationKind.Badge;
         CalloutBar.Visibility = isCallout ? Visibility.Visible : Visibility.Collapsed;
         if (isCallout)
         {
@@ -302,6 +332,7 @@ public partial class AnnotationEditorWindow : Window
 
     private Rect BoundsOf(Annotation a)
     {
+        if (a.Kind == AnnotationKind.Badge) return new Rect(a.X1, a.Y1, 44, 44);
         if (a.Kind == AnnotationKind.Callout)
         {
             Size label = MeasureCallout(a);
@@ -316,6 +347,11 @@ public partial class AnnotationEditorWindow : Window
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (Keyboard.Modifiers == ModifierKeys.Control && Keyboard.FocusedElement is not TextBox)
+        {
+            if (e.Key == Key.Z) { Undo_Click(this, new RoutedEventArgs()); e.Handled = true; return; }
+            if (e.Key == Key.Y) { Redo_Click(this, new RoutedEventArgs()); e.Handled = true; return; }
+        }
         if (e.Key != Key.Delete || _selected == null) return;
         if (Keyboard.FocusedElement is TextBox) return; // typing in the callout box
         DeleteSelected_Click(this, new RoutedEventArgs());
@@ -326,22 +362,22 @@ public partial class AnnotationEditorWindow : Window
     {
         if (_selected == null) return;
         _annotations.Remove(_selected);
+        Checkpoint();
         Select(null);
     }
 
     private void Undo_Click(object sender, RoutedEventArgs e)
     {
-        if (_annotations.Count == 0) return;
-        var last = _annotations[^1];
-        _annotations.RemoveAt(_annotations.Count - 1);
-        if (ReferenceEquals(_selected, last)) Select(null);
-        else RebuildInk();
+        RestoreAnnotations(_historyIndex - 1);
     }
+
+    private void Redo_Click(object sender, RoutedEventArgs e) => RestoreAnnotations(_historyIndex + 1);
 
     private void CalloutTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        if (_suppressCalloutTextEvent || _selected?.Kind != AnnotationKind.Callout) return;
+        if (_suppressCalloutTextEvent || _selected?.Kind is not (AnnotationKind.Callout or AnnotationKind.Badge)) return;
         _selected.Text = CalloutTextBox.Text;
+        Checkpoint();
         RebuildInk();
     }
 
@@ -353,9 +389,8 @@ public partial class AnnotationEditorWindow : Window
             "Reset image", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
         if (result != MessageBoxResult.OK) return;
 
-        AnnotationStore.ResetToOriginal(_shotPath);
-        ChangedOnDisk = true;
         _annotations.Clear();
+        Checkpoint();
         Select(null);
     }
 
@@ -443,6 +478,9 @@ public partial class AnnotationEditorWindow : Window
         var h = new List<(Point, Action<Point>)>();
         switch (a.Kind)
         {
+            case AnnotationKind.Badge:
+                h.Add((new Point(a.X1, a.Y1), p => { a.X1 = p.X; a.Y1 = p.Y; }));
+                break;
             case AnnotationKind.Arrow:
                 h.Add((new Point(a.X1, a.Y1), p => { a.X1 = p.X; a.Y1 = p.Y; }));
                 h.Add((new Point(a.X2, a.Y2), p => { a.X2 = p.X; a.Y2 = p.Y; }));
@@ -469,6 +507,15 @@ public partial class AnnotationEditorWindow : Window
 
         switch (a.Kind)
         {
+            case AnnotationKind.Badge:
+            {
+                var badge = new Border { Width = 44, Height = 44, CornerRadius = new CornerRadius(22), Background = brush,
+                    Child = new TextBlock { Text = a.Text, Foreground = Brushes.White, FontWeight = FontWeights.Bold,
+                        FontSize = 20, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                    IsHitTestVisible = false };
+                Canvas.SetLeft(badge, a.X1); Canvas.SetTop(badge, a.Y1); Ink.Children.Add(badge);
+                break;
+            }
             case AnnotationKind.Arrow:
             {
                 double head = Math.Max(12, w * 3.5);

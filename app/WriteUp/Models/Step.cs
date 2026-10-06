@@ -16,6 +16,18 @@ public enum StepKind
 /// <summary>A single recorded action shown in the list and the report.</summary>
 public class Step : INotifyPropertyChanged
 {
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    private string _notes = "";
+    public string Notes { get => _notes; set { if (_notes != value) { _notes = value; OnPropertyChanged(); } } }
+    private int _level;
+    public int Level { get => _level; set { int v = Math.Clamp(value, 0, 4); if (_level != v) { _level = v; OnPropertyChanged(); } } }
+    private string? _sharedImageStepId;
+    public string? SharedImageStepId { get => _sharedImageStepId; set { _sharedImageStepId = value; OnPropertyChanged(); OnPropertyChanged(nameof(ImagePath)); OnPropertyChanged(nameof(HasScreenshot)); } }
+    private string _marker = "";
+    public string Marker { get => _marker; set { _marker = value; OnPropertyChanged(); } }
+    private bool _hideImage;
+    public bool HideImage { get => _hideImage; set { _hideImage = value; OnPropertyChanged(); OnPropertyChanged(nameof(ImagePath)); OnPropertyChanged(nameof(HasScreenshot)); } }
+
     public StepKind Kind { get; set; }
     public DateTime Timestamp { get; set; } = DateTime.Now;
     public string Window { get; set; } = "";
@@ -58,7 +70,7 @@ public class Step : INotifyPropertyChanged
 
     /// <summary>The image actually displayed and exported: the zoomed variant
     /// when enabled and available, otherwise the plain screenshot.</summary>
-    public string? ImagePath => ShowZoom && HasZoom ? ZoomImagePath : ScreenshotPath;
+    public string? ImagePath => HideImage || !string.IsNullOrEmpty(SharedImageStepId) ? null : ShowZoom && HasZoom ? ZoomImagePath : ScreenshotPath;
 
     private string _caption = "";
 
@@ -74,7 +86,7 @@ public class Step : INotifyPropertyChanged
         }
     }
 
-    public bool HasScreenshot => !string.IsNullOrEmpty(ScreenshotPath);
+    public bool HasScreenshot => !string.IsNullOrEmpty(ImagePath);
 
     /// <summary>Call after an image file was rewritten in place (annotation
     /// editor) so thumbnails and the preview reload it from disk.</summary>

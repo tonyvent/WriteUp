@@ -8,7 +8,8 @@ public enum AnnotationKind
     Box,        // rectangle outline between the two corners
     Callout,    // text label anchored at (X1,Y1) with a leader line to (X2,Y2)
     Blur,       // pixelate the rectangular region (burned in on save)
-    Redact      // solid black over the rectangular region (burned in on save)
+    Redact,     // solid black over the rectangular region (burned in on save)
+    Badge       // numbered or lettered marker anchored at (X1,Y1)
 }
 
 /// <summary>

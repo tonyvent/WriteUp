@@ -26,7 +26,7 @@ public static class SessionStore
 
     public sealed class SessionDto
     {
-        public int FormatVersion { get; set; } = 1;
+        public int FormatVersion { get; set; } = 2;
         public string SavedAt { get; set; } = "";
         public MetaDto Meta { get; set; } = new();
         public List<StepDto> Steps { get; set; } = new();
@@ -46,6 +46,12 @@ public static class SessionStore
 
     public sealed class StepDto
     {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
+        public string Notes { get; set; } = "";
+        public int Level { get; set; }
+        public string? SharedImageStepId { get; set; }
+        public string Marker { get; set; } = "";
+        public bool HideImage { get; set; }
         public string Kind { get; set; } = "Note";
         public DateTime Timestamp { get; set; }
         public string Window { get; set; } = "";
@@ -78,6 +84,7 @@ public static class SessionStore
             },
             Steps = steps.Select(s => new StepDto
             {
+                Id = s.Id, Notes = s.Notes, Level = s.Level, SharedImageStepId = s.SharedImageStepId, Marker = s.Marker, HideImage = s.HideImage,
                 Kind = s.Kind.ToString(),
                 Timestamp = s.Timestamp,
                 Window = s.Window, App = s.App,
@@ -121,6 +128,7 @@ public static class SessionStore
         {
             steps.Add(new Step
             {
+                Id = d.Id, Notes = d.Notes, Level = d.Level, SharedImageStepId = d.SharedImageStepId, Marker = d.Marker, HideImage = d.HideImage,
                 Kind = Enum.TryParse<StepKind>(d.Kind, out var k) ? k : StepKind.Note,
                 Timestamp = d.Timestamp,
                 Window = d.Window, App = d.App,

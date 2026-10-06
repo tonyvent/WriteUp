@@ -3,8 +3,8 @@
 A real, shareable Windows app that records what you do — every click gets an
 annotated screenshot, what you type becomes a step — and turns it into a clean,
 branded write-up. It shows a **live preview** of the report as you go and exports
-to **PDF, Word, HTML, and Markdown**. Built in **C# / .NET 8 WPF**, with a single
-small dependency (the MIT-licensed PDFsharp/MigraDoc) used only for PDF/Word.
+to **PDF, Word, HTML, and Markdown**. Built in **C# / .NET 8 WPF**, with PDFsharp/MigraDoc for document export, Windows AI Speech for local transcription,
+and NAudio for selecting a microphone.
 
 ## Open & run in Visual Studio
 1. Install **Visual Studio 2022** (17.8+) with the **.NET desktop development**
@@ -12,7 +12,7 @@ small dependency (the MIT-licensed PDFsharp/MigraDoc) used only for PDF/Word.
 2. Open `app/WriteUp.sln`.
 3. Press **F5** (Debug) or **Ctrl+F5** (Run without debugging).
 
-The first build restores one NuGet package (`PDFsharp-MigraDoc-WPF`), so an
+The first build restores the export, speech and microphone NuGet packages, so an
 internet connection is needed the first time; after that it builds offline.
 
 > Prefer the command line? From the `app/` folder:
@@ -188,3 +188,173 @@ app/
   caption is editable in the UI before export, so you can always fix wording.
 - The preview is a faithful WPF rendering of the report; the exported PDF/Word may
   differ very slightly in pagination but matches content and styling.
+
+## 0.5.0 — capture and editor enhancements
+
+- **Narration:** narration starts with recording when enabled in Settings.
+  Use the microphone button in the main window or compact bar to pause/restart it. Explain why you are performing each action.
+  Recognized phrases are added to the notes of the step active when the phrase
+  began; speech before the first action becomes a business-context step. Notes
+  autosave and appear in every report format. Click again to stop dictation.
+  This uses the installed Windows speech recognizer and selected microphone:
+  install a speech language and allow desktop microphone access if unavailable.
+  Recognition happens locally; WriteUp does not save audio or upload it.
+- **Descriptions:** browser documents are no longer classified as text fields.
+  Hit-test bounds are checked, small actionable parents of icon/label controls
+  are preferred, and unknown targets use an honest highlighted-location caption.
+  UI Automation remains best-effort, especially for custom-drawn controls.
+- **Shared screenshots:** click **Edit** on a step and select the screenshot from
+  another step. The report renders the image once and links the other instructions
+  to it. Open the source image's **✎** editor and use **1 2 3** or **A B C** to
+  place markers, then set each instruction's matching annotation label in Edit.
+  Existing captures are retained so sharing can be undone. Consolidation is an
+  author decision; similar screens are not automatically merged.
+- **Editing:** Edit includes business-context notes with bold/italic formatting,
+  web/email links and references to other steps, five levels of instruction
+  hierarchy, screenshot selection, and text-only mode. **Add note** also works
+  outside recording and adds a text-only instruction. Formatting is stored as a
+  small Markdown vocabulary and rendered in HTML, PDF, Word-compatible RTF and
+  the preview. The Windows app's Word output is still RTF, not native DOCX.
+- **Undo/redo:** use **Undo step edit / Redo step edit** for description edits,
+  deletions, reordering, nesting, screenshot sharing and note changes. Step
+  history holds the latest 200 snapshots for the current editing session and
+  resets when opening a session or completing a recording. Text editors also
+  have their normal local undo. The image editor has separate Undo/Redo buttons
+  and Ctrl+Z/Ctrl+Y for drawing, moving, resizing, editing labels, deleting and
+  resetting marks. Reset is staged until Save; Cancel leaves the image intact.
+  Previously saved blur/redaction remains permanent. Image history is local to
+  the open image editor, not the step-history buttons.
+- **Multiple monitors/windows:** captures now resolve native physical-pixel
+  monitor geometry in an explicit per-monitor DPI context; negative display
+  coordinates are supported. Foreground-window/title changes are checked every
+  600 ms while recording, so switching windows without clicking can produce a
+  context screenshot. Very brief switches can be missed. **Ctrl+Alt+S** captures
+  the current application's monitor; **Ctrl+Alt+A** or **Capture all screens**
+  captures the full virtual desktop for comparisons. These are desktop captures,
+  so visible overlapping windows are included. Click captures remain on the
+  clicked monitor and respect the existing maximum image-width setting.
+
+Stopping, exporting or closing now drains queued capture events and the final
+recognized speech before saving. Continuing a recording keeps its images in the
+same session folder. Sessions saved by older versions can still be opened.
+
+### Regression checks
+
+```powershell
+dotnet build app/WriteUp/WriteUp.csproj -c Release
+dotnet run --project app/WriteUp.CoreTests -c Release
+```
+
+The core checks cover session backward compatibility and portability, undo/redo,
+shared images, nested numbering, safe links, formatted HTML/Markdown and the
+existing annotation enum values. GitHub Actions also builds on Windows.
+
+Before distributing this version, run the [Windows acceptance checks](../docs/WINDOWS-ACCEPTANCE.md)
+with a microphone and mixed-DPI monitors. A successful cross-build is not a live
+capture or speech-recognition test.
+
+
+## 0.5.1 — recording settings and live narration
+
+Open **Settings → Microphone and narration** before recording:
+
+1. Enable **Listen and transcribe automatically when recording starts** (on by default).
+2. Select a microphone and installed Windows speech language.
+3. Click **Test microphone**. Check that the meter moves and your words appear.
+   If needed, use **Windows sound settings** to fix input volume or permissions.
+4. Choose mouse-click, typing, scroll and window-change capture options in
+   **Recording**, then Save and start recording.
+
+During recording, tentative speech appears as **Hearing…**, while finalized
+phrases are appended to the relevant step's notes and autosaved. The main window
+and compact bar both show microphone state, audio level and transcription. Raw
+audio is streamed in memory and not retained. Microphone failure is visible and
+does not prevent screenshot recording. Input-hook failure now aborts startup
+with an error instead of falsely displaying an active recording. Typing/scroll
+bursts flush after an idle interval so they do not wait until Stop to appear.
+
+Settings is resizable and scrollable with Save/Cancel kept outside the scrolling
+content. Main-window headers, step actions, annotation tools and footer actions
+use distinct rows or wrapping panels. The recording controls and live transcript
+stay outside the step list's scrolling area.
+
+Additional Windows checks:
+
+```powershell
+dotnet run --project app/WriteUp.WindowsTests -c Release
+```
+
+This opens an isolated target window, exercises the actual Windows input hooks
+and screenshot capture, and checks visible control intersections at minimum
+window sizes and in scrolled views. It requires an interactive Windows desktop.
+It does not replace a real microphone test or physical mixed-DPI monitor testing.
+
+
+## 0.5.2 - Microsoft Azure Speech
+
+Settings now supports Windows dictation (local) or Microsoft Azure Speech (cloud).
+For Azure, expand the connection settings and enter your Speech resource region,
+key, language code, and optional semicolon-separated vocabulary hints. Use Test
+microphone before recording. Keys are protected with Windows DPAPI for your
+Windows account. Azure requires internet and your own Speech resource, with
+usage billing; it does not use a Teams subscription. Existing installs retain
+Windows dictation until you select Azure. Screenshot recording continues if
+transcription fails. Partial captions, final phrase timestamps, microphone level,
+and an end-of-stream drain connect narration to existing recorded steps.
+
+Download the Windows x64 artifact from the successful GitHub Actions build.
+See [the acceptance checklist](../docs/WINDOWS-ACCEPTANCE.md) to test the original
+requests and compare the same microphone/script against Teams. Identical Teams
+accuracy is not guaranteed. Live Azure recognition needs a manual resource test.
+
+
+## 0.5.4 — modern offline Windows speech only
+
+Narration now uses `Microsoft.Windows.AI.Speech`, supplied by
+`Microsoft.WindowsAppSDK.AI` **2.5.4-experimental** (September 29, 2026).
+The previous `Windows.Media.SpeechRecognition` online API, `System.Speech`
+legacy engine, and single-phrase fallback have been removed. Old settings
+migrate to the single offline provider while preserving the saved endpoint ID.
+
+This API is currently experimental; a successful build is not proof of working
+recognition on a particular PC. It requires **Windows 11 24H2/build 26100 or
+later**, package identity, the `systemAIModels` capability, and a ready Windows
+AI speech model. The model is preinstalled on supported Copilot+ PCs; on CPU-only
+PCs Microsoft documents a one-time model download through Windows Update.
+**This build deliberately does not download any model**: it checks readiness and
+stops with the actual status when the component is missing or unsupported.
+Win+H and Voice Access have separate availability from this app API.
+
+### Build and run this version
+
+1. Close WriteUp. From the updated source, run `app/register-windows-app.cmd`.
+   It publishes the app with its Windows App SDK runtime libraries and registers
+   the package layout. Developer Mode is needed for this development registration.
+   Existing registration must be updated because this version adds the
+   `systemAIModels` capability. The script does not change Windows policies.
+2. Or download the **WriteUp-0.5.4-Windows-Offline-Speech** Actions artifact,
+   extract the entire folder, and run its `register-windows-app.cmd`.
+3. Launch **WriteUp (Offline speech)** from Start. In Settings, confirm the
+   **WriteUp 0.5.4** label, choose your actual microphone, and save.
+4. **Check offline speech** reports Windows model availability without downloading.
+   **Test selected input level** checks that exact microphone independently.
+   **Test transcription** loads the installed model and starts offline recognition.
+5. Start recording. Final phrases are attached to steps by their audio offset.
+   Stop waits for recognition to finish before disposing the engine.
+
+The selected endpoint is passed directly to `AudioConfiguration.FromAudioDevice`;
+Windows defaults do not need changing. Missing devices fail explicitly instead of
+silently selecting another input. Audio is processed locally; no key or subscription
+is used. No cloud/legacy/phrase fallback exists. A failure writes the engine,
+version, model readiness and native error to `%APPDATA%/WriteUp/speech-error.txt`.
+
+The older single-EXE/installer instructions above do **not** provide the registered
+layout needed by this speech engine. Use the complete offline-speech artifact.
+
+Validation includes compilation, settings migration, transcript timing, WPF layout,
+and capture regression checks. Live speech accuracy and model loading require a
+supported Windows PC with the model installed; CI does not have a physical mic.
+
+References:
+- https://learn.microsoft.com/windows/ai/apis/speech-recognition
+- https://learn.microsoft.com/windows/apps/windows-app-sdk/release-notes/windows-app-sdk-2-0?pivots=experimental
