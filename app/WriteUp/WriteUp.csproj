@@ -48,6 +48,9 @@
          self-contained .exe (no loose files to copy). The logo is read back at
          runtime via its pack URI; the icon is the app/taskbar/window icon. -->
     <None Remove="Assets\dynamic-logo.png" />
+    <!-- Windows App SDK also picks PNGs up as loose Content. This image is
+         embedded by WPF; do not advertise a nonexistent loose copy to consumers. -->
+    <Content Remove="Assets\dynamic-logo.png" />
     <Resource Include="Assets\dynamic-logo.png" />
     <None Remove="Assets\logo.ico" />
     <Resource Include="Assets\logo.ico" />
