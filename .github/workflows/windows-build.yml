@@ -18,14 +18,7 @@ jobs:
       - run: dotnet run --project app/WriteUp.WindowsTests -c Release
         timeout-minutes: 3
 
-      - name: Publish Windows test build
-        run: dotnet publish app/WriteUp/WriteUp.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o artifacts/WriteUp
-      - uses: actions/upload-artifact@v4
-        with:
-          name: WriteUp-0.5.3-Portable-Windows-x64
-          path: artifacts/WriteUp/
-
-      - name: Build registered Windows dictation app
+      - name: Build registered Windows offline speech app
         shell: powershell
         run: ./app/build-windows-app.ps1 -OutputPath artifacts/WindowsApp
       - name: Validate Windows package manifest
@@ -37,5 +30,5 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Package validation failed" }
       - uses: actions/upload-artifact@v4
         with:
-          name: WriteUp-0.5.3-Windows-Dictation
+          name: WriteUp-0.5.4-Windows-Offline-Speech
           path: artifacts/WindowsApp/

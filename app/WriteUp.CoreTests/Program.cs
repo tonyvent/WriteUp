@@ -11,37 +11,21 @@ void Check(bool condition, string description)
 }
 var defaults = JsonSerializer.Deserialize<AppSettings>("{}");
 Check(defaults!.NarrationEnabled && defaults.CaptureClicks && defaults.CaptureTyping, "Old settings enable narration and action capture by default");
-var prefs = new AppSettings { MicrophoneDevice = 2, MicrophoneName = "USB microphone", SpeechRecognizerId = "en-US", CaptureTyping = false };
+var prefs = new AppSettings { WindowsMicrophoneId = "selected-usb-endpoint", WindowsMicrophoneName = "USB microphone", CaptureTyping = false };
 var prefsAgain = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(prefs))!;
-Check(prefsAgain.MicrophoneDevice == 2 && prefsAgain.MicrophoneName == "USB microphone" && !prefsAgain.CaptureTyping, "Microphone and capture preferences round-trip");
-Check(defaults.TranscriptionProvider == "WindowsOnline", "New settings use Windows online dictation without cloud credentials");
-var migrated = new AppSettings { TranscriptionProvider = "Azure" }; migrated.UpgradeSpeechSettings();
-Check(migrated.TranscriptionProvider == "WindowsOnline", "Azure settings migrate to built-in Windows dictation");
-var oldSpeech = new AppSettings { TranscriptionProvider = "Windows" }; oldSpeech.UpgradeSpeechSettings();
-Check(oldSpeech.TranscriptionProvider == "WindowsOnline", "Old default upgrades from legacy to Windows online dictation");
-var native = new AppSettings { TranscriptionProvider = "WindowsLegacy", WindowsSpeechLanguage = "en-US" };
-var nativeAgain = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(native))!; nativeAgain.UpgradeSpeechSettings();
-Check(nativeAgain.TranscriptionProvider == "WindowsLegacy" && nativeAgain.WindowsSpeechLanguage == "en-US", "Explicit legacy fallback and language survive restart");
-using (var audio = new MicrophoneStream())
+Check(prefsAgain.WindowsMicrophoneId == "selected-usb-endpoint" && prefsAgain.WindowsMicrophoneName == "USB microphone" && !prefsAgain.CaptureTyping, "Exact microphone endpoint and capture preferences round-trip");
+Check(defaults.TranscriptionProvider == "WindowsOfflineAI", "New settings select modern offline Windows speech only");
+foreach (var oldProvider in new[] { "Azure", "Windows", "WindowsLegacy", "WindowsOnline", "WindowsOfflineAI", "unknown" })
 {
-    var bytes = new byte[4];
-    Check(audio.Read(bytes, 0, 0) == 0, "Zero-length microphone read returns immediately");
-    var pending = Task.Run(() => audio.Read(bytes, 0, bytes.Length));
-    Check(!pending.Wait(30), "Microphone stream waits for real audio instead of generating silence");
-    audio.WriteAudio(new byte[] {1, 2, 3, 4}, 4);
-    Check(pending.Wait(1000) && pending.Result == 4 && bytes.SequenceEqual(new byte[] {1,2,3,4}), "Audio samples reach the speech reader intact");
-    Check(audio.Length == long.MaxValue && audio.Position == 4 && audio.Seek(0, SeekOrigin.Current) == 4, "Live audio supports System.Speech stream metadata queries");
-    var end = Task.Run(() => audio.Read(bytes, 0, 4)); audio.Complete();
-    Check(end.Wait(1000) && end.Result == 0, "Stopping audio unblocks recognition reads with EOF");
-    Check(!audio.WriteAudio(new byte[] {1}, 1), "Late microphone callbacks cannot write after stopping");
+    var migrated = new AppSettings { TranscriptionProvider = oldProvider, WindowsMicrophoneId = "usb-mic" };
+    migrated.UpgradeSpeechSettings();
+    Check(migrated.TranscriptionProvider == "WindowsOfflineAI" && migrated.WindowsMicrophoneId == "usb-mic", "Migration removes other engines and preserves microphone: " + oldProvider);
 }
-using (var audio = new MicrophoneStream())
-{
-    bool accepted = true;
-    for (int i = 0; i < 100; i++) accepted &= audio.WriteAudio(new byte[] {(byte)i}, 1);
-    Check(accepted, "PCM buffer accepts bounded audio data");
-    Check(!audio.WriteAudio(new byte[] {1}, 1), "Slow speech reader cannot grow microphone memory without bound");
-}
+var started = new DateTime(2026, 10, 6, 1, 0, 0);
+var received = started.AddSeconds(8);
+Check(SpeechTiming.PhraseTime(started, received, 2.5f) == started.AddSeconds(2.5), "Delayed transcript attaches to phrase start, not receipt time");
+foreach (float invalid in new[] { float.NaN, float.PositiveInfinity, -1f, 8000f })
+    Check(SpeechTiming.PhraseTime(started, received, invalid) == received, "Invalid speech offset cannot attach to a future step: " + invalid);
 var a = new Step { Caption = "Open form", ScreenshotPath = "one.png", Notes = "**Check** the account", Level = 0 };
 var b = new Step { Caption = "Approve", SharedImageStepId = a.Id, Marker = "B", Level = 1 };
 var steps = new List<Step> { a, b };

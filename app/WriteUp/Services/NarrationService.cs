@@ -1,155 +1,178 @@
-using System.Speech.Recognition;
-using System.Speech.AudioFormat;
-using NAudio.Wave;
+using System.IO;
+using Microsoft.Windows.AI;
+using Microsoft.Windows.AI.Speech;
+using NAudio.CoreAudioApi;
 using WriteUp.Models;
 
 namespace WriteUp.Services;
 
-/// <summary>Built-in Windows online dictation, with an explicit legacy local fallback.</summary>
+/// <summary>Modern on-device Windows AI speech only. Never downloads a model or selects another engine.</summary>
 public sealed class NarrationService : IDisposable
 {
-    public record Microphone(int Number, string Name) { public override string ToString() => Name; }
-    public record Language(string Id, string Name) { public override string ToString() => Name; }
-    public static List<Microphone> Microphones()
-    {
-        var result = new List<Microphone> { new(-1, "Windows default microphone") };
-        for (int i = 0; i < WaveIn.DeviceCount; i++) result.Add(new(i, WaveIn.GetCapabilities(i).ProductName));
-        return result;
-    }
-    public static List<Language> Languages() => SpeechRecognitionEngine.InstalledRecognizers()
-        .Select(r => new Language(r.Id, r.Culture.DisplayName + " — " + r.Name)).ToList();
-
-    private WindowsNarration? _windows;
-    private Task? _startup;
-    private SpeechRecognitionEngine? _engine;
-    private WaveInEvent? _capture;
-    private MicrophoneStream? _stream;
+    private readonly SemaphoreSlim _operations = new(1, 1);
+    private readonly CancellationTokenSource _cancel = new();
+    private readonly object _stopLock = new();
+    private SpeechRecognitionModel? _model;
+    private StreamingRecognition? _recognition;
+    private MMDevice? _microphone;
+    private System.Threading.Timer? _meter;
+    private Task? _startup, _stop;
     private DateTime _started;
-    private readonly TaskCompletionSource<bool> _stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private Task? _stopTask;
-    private volatile bool _completed, _stopping;
+    private volatile bool _listening, _stopping, _disposed;
+    private string _stage = "checking Windows offline speech", _readyState = "not checked";
+    public bool IsListening => _listening && !_stopping && !_disposed;
     public event Action<DateTime, string>? Transcribed;
     public event Action<string>? Hypothesis;
     public event Action<string>? Status;
     public event Action<int>? AudioLevel;
     public event Action? Ended;
-    public bool IsListening => _windows?.IsListening ?? (_engine != null && !_completed && !_stopping);
 
+    public static string CheckAvailability()
+    {
+        RequireWindowsPackage();
+        var ready = SpeechRecognitionModelFactory.Default.GetReadyState();
+        RequireReady(ready);
+        return "Windows offline speech model is installed and ready. No download is needed.";
+    }
+    private static void RequireWindowsPackage()
+    {
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 26100))
+            throw new InvalidOperationException("Windows offline AI speech requires Windows 11 24H2 (build 26100) or later.");
+        try { _ = Windows.ApplicationModel.Package.Current.Id.Name; }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("Launch the registered WriteUp 0.5.4 app from Start. Run app\\register-windows-app.cmd after updating; the offline API requires app identity and the systemAIModels capability.", ex);
+        }
+    }
+    private static void RequireReady(AIFeatureReadyState state)
+    {
+        if (state == AIFeatureReadyState.Ready) return;
+        if (state == AIFeatureReadyState.NotSupportedOnCurrentSystem)
+            throw new InvalidOperationException("Windows reports that its offline AI speech API is not supported on this system. No other engine was started.");
+        throw new InvalidOperationException($"Windows offline speech model is not ready ({state}). This API requires Microsoft's on-device speech component. WriteUp has not downloaded anything and cannot transcribe until Windows makes that component available. Win+H or Voice Access working does not establish that this separate API's model is installed.");
+    }
     public Task StartAsync(AppSettings? settings = null) => _startup ??= StartCoreAsync(settings ?? new AppSettings());
     private async Task StartCoreAsync(AppSettings settings)
     {
-        if (settings.TranscriptionProvider != "WindowsLegacy")
-        {
-            _windows = new WindowsNarration();
-            _windows.Transcribed += (at, text) => Transcribed?.Invoke(at, text);
-            _windows.Hypothesis += text => Hypothesis?.Invoke(text);
-            _windows.Status += text => Status?.Invoke(text);
-            _windows.AudioLevel += level => AudioLevel?.Invoke(level);
-            _windows.Ended += () => Ended?.Invoke();
-            try { await _windows.StartAsync(settings); } catch { Dispose(); throw; }
-            return;
-        }
-        StartLegacy(settings);
-    }
-    private void StartLegacy(AppSettings settings)
-    {
-        var available = SpeechRecognitionEngine.InstalledRecognizers();
-        var recognizer = string.IsNullOrEmpty(settings.SpeechRecognizerId)
-            ? available.FirstOrDefault(r => r.Culture.Equals(System.Globalization.CultureInfo.CurrentUICulture)) ?? available.FirstOrDefault()
-            : available.FirstOrDefault(r => r.Id == settings.SpeechRecognizerId);
-        if (recognizer == null)
-            throw new InvalidOperationException("No matching Windows speech recognizer is installed. Install a speech language in Windows Settings, then select it in WriteUp Settings.");
-        var engine = new SpeechRecognitionEngine(recognizer);
-        _engine = engine;
+        await _operations.WaitAsync();
         try
         {
-            engine.LoadGrammar(new DictationGrammar());
-            engine.EndSilenceTimeout = TimeSpan.FromMilliseconds(600);
-            engine.EndSilenceTimeoutAmbiguous = TimeSpan.FromMilliseconds(1000);
-            if (settings.MicrophoneDevice < 0) engine.SetInputToDefaultAudioDevice();
-            else
+            _cancel.Token.ThrowIfCancellationRequested();
+            RequireWindowsPackage();
+            var factory = SpeechRecognitionModelFactory.Default;
+            var ready = factory.GetReadyState();
+            _readyState = ready.ToString();
+            RequireReady(ready);
+            _stage = "opening selected microphone";
+            var input = WindowsMicrophones.RequireSelected(settings.WindowsMicrophoneId);
+            using (var devices = new MMDeviceEnumerator()) _microphone = devices.GetDevice(input.Id);
+            _stage = "loading installed Windows offline speech model";
+            Status?.Invoke("Loading the installed Windows offline speech model…");
+            // Deliberately no EnsureReadyAsync: it can download a system model.
+            _model = await factory.CreateAsync().AsTask(_cancel.Token);
+            _cancel.Token.ThrowIfCancellationRequested();
+            _stage = "starting offline transcription";
+            var config = AudioConfiguration.FromAudioDevice(input.Id);
+            var recognition = new StreamingRecognition(config, _model);
+            _recognition = recognition;
+            recognition.Recognizing += (_, e) => { if (!_disposed) Hypothesis?.Invoke(e.Text); };
+            recognition.Recognized += (_, e) =>
             {
-                var device = Microphones().FirstOrDefault(d => d.Number == settings.MicrophoneDevice && d.Name == settings.MicrophoneName)
-                    ?? throw new InvalidOperationException("The selected microphone changed or was disconnected. Select it again in Settings.");
-                _stream = new MicrophoneStream();
-                _capture = new WaveInEvent { DeviceNumber = device.Number, WaveFormat = new WaveFormat(16000, 16, 1), BufferMilliseconds = 100 };
-                var stream = _stream;
-                _capture.DataAvailable += (_, e) =>
-                {
-                    if (!stream.WriteAudio(e.Buffer, e.BytesRecorded) && !_stopping)
-                    {
-                        stream.Complete();
-                        Status?.Invoke("Microphone audio could not be processed in time. Stop narration and retry.");
-                    }
-                };
-                _capture.RecordingStopped += (_, e) =>
-                {
-                    stream.Complete();
-                    if (e.Exception != null) Status?.Invoke("Microphone disconnected or unavailable: " + e.Exception.Message);
-                };
-                engine.SetInputToAudioStream(stream, new SpeechAudioFormatInfo(16000, AudioBitsPerSample.Sixteen, AudioChannel.Mono));
-            }
-            engine.AudioLevelUpdated += (_, e) => AudioLevel?.Invoke(e.AudioLevel);
-            engine.SpeechHypothesized += (_, e) => Hypothesis?.Invoke(e.Result.Text);
-            engine.SpeechRecognized += (_, e) =>
-            {
-                if (!string.IsNullOrWhiteSpace(e.Result.Text))
-                    Transcribed?.Invoke(_started + (e.Result.Audio?.AudioPosition ?? TimeSpan.Zero), e.Result.Text);
+                if (_disposed || !e.IsFinal || string.IsNullOrWhiteSpace(e.Text)) return;
+                // Windows reports the phrase offset relative to this audio session.
+                var at = SpeechTiming.PhraseTime(_started, DateTime.Now, e.Offset);
+                Transcribed?.Invoke(at, e.Text);
                 Hypothesis?.Invoke("");
             };
-            engine.SpeechRecognitionRejected += (_, _) =>
-            { Hypothesis?.Invoke(""); Status?.Invoke("Speech was unclear. Please repeat or edit the step notes."); };
-            engine.RecognizeCompleted += (_, e) =>
-            {
-                _completed = true;
-                if (e.Error != null) Status?.Invoke("Narration stopped: " + e.Error.Message);
-                else if (!_stopping) Status?.Invoke("Microphone input ended. Check the device in Settings and restart narration.");
-                _stopping = true;
-                try { _capture?.StopRecording(); } catch { }
-                _stopped.TrySetResult(true);
-                AudioLevel?.Invoke(0);
-                Ended?.Invoke();
-            };
             _started = DateTime.Now;
-            _capture?.StartRecording();
-            engine.RecognizeAsync(RecognizeMode.Multiple);
-            Status?.Invoke("Listening — speak naturally; finalized phrases appear beside the recorded step.");
+            await recognition.StartContinuousRecognitionAsync().AsTask(_cancel.Token);
+            _cancel.Token.ThrowIfCancellationRequested();
+            _listening = true;
+            _meter = new System.Threading.Timer(_ =>
+            {
+                if (!IsListening) return;
+                try
+                {
+                    if (_microphone!.State != DeviceState.Active)
+                        throw new InvalidOperationException("Selected microphone disconnected or disabled.");
+                    AudioLevel?.Invoke((int)(_microphone.AudioMeterInformation.MasterPeakValue * 100));
+                }
+                catch (Exception ex)
+                {
+                    if (!_stopping)
+                    {
+                        Status?.Invoke(ex.Message + " Narration stopped; select a microphone in Settings.");
+                        _ = StopAsync();
+                    }
+                }
+            }, null, 0, 100);
+            Status?.Invoke("Listening offline — " + input.Name + ". Finalized phrases become step notes.");
         }
-        catch { Dispose(); throw; }
+        catch (Exception ex)
+        {
+            _listening = false;
+            ReleaseResources();
+            if (_stopping && ex is OperationCanceledException) throw;
+            string path = WriteDiagnostic(ex);
+            throw new InvalidOperationException($"Windows offline speech failed while {_stage}. {ex.Message}\nDiagnostic: {path}", ex);
+        }
+        finally { _operations.Release(); }
     }
-
-    public Task StopAsync() => _stopTask ??= StopCoreAsync();
-    private async Task StopCoreAsync()
+    private string WriteDiagnostic(Exception ex)
     {
-        if (_windows != null) { await _windows.StopAsync(); Dispose(); return; }
-        var engine = _engine;
-        if (engine == null) return;
-        _stopping = true;
+        string path = Path.Combine(SettingsStore.AppDataDir, "speech-error.txt");
         try
         {
-            if (!_completed)
+            File.WriteAllText(path, $"Time: {DateTimeOffset.Now:O}\nWriteUp: 0.5.4\nEngine: Microsoft.Windows.AI.Speech (offline only)\nSDK: 2.5.4-experimental\nStage: {_stage}\nModel readiness: {_readyState}\nWindows: {Environment.OSVersion}\nHRESULT: 0x{ex.HResult:X8}\n{ex}");
+            return path;
+        }
+        catch { return "could not write diagnostic file"; }
+    }
+    public Task StopAsync()
+    {
+        lock (_stopLock)
+        {
+            _stopping = true;
+            _cancel.Cancel();
+            return _stop ??= StopCoreAsync();
+        }
+    }
+    private async Task StopCoreAsync()
+    {
+        await _operations.WaitAsync();
+        try
+        {
+            if (_recognition != null)
             {
-                engine.RecognizeAsyncStop();
-                _capture?.StopRecording();
-                _stream?.Complete();
-                if (await Task.WhenAny(_stopped.Task, Task.Delay(5000)) != _stopped.Task)
-                    Status?.Invoke("The last phrase did not finish. Check the final step notes.");
+                // Keep final-result handlers alive while the native stop drains.
+                await _recognition.StopContinuousRecognitionAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(15));
             }
         }
-        catch (Exception ex) { Status?.Invoke("Narration stopped: " + ex.Message); }
-        finally { Dispose(); }
+        catch (Exception ex)
+        {
+            WriteDiagnostic(ex);
+            Status?.Invoke("Windows did not finish the last phrase. Check the final step notes. " + ex.Message);
+        }
+        finally
+        {
+            _disposed = true; _listening = false;
+            ReleaseResources();
+            _operations.Release();
+            AudioLevel?.Invoke(0); Ended?.Invoke();
+        }
+    }
+    private void ReleaseResources()
+    {
+        _meter?.Dispose(); _meter = null;
+        try { _recognition?.Dispose(); } catch { } _recognition = null;
+        try { _model?.Dispose(); } catch { } _model = null;
+        try { _microphone?.Dispose(); } catch { } _microphone = null;
     }
     public void Dispose()
     {
-        _stopping = true;
-        _windows?.Dispose(); _windows = null;
-        var engine = _engine; _engine = null;
-        _stream?.Complete(); // unblock the recognizer before waiting for disposal
-        try { _capture?.Dispose(); } catch { }
-        _capture = null;
-        try { if (engine != null && !_completed) engine.RecognizeAsyncCancel(); } catch { }
-        try { engine?.Dispose(); } catch { }
-        _stream?.Dispose(); _stream = null;
-        AudioLevel?.Invoke(0);
+        // Serialize cleanup with native startup/stop; never dispose a model under
+        // an in-flight operation. Window-close callers suppress further callbacks.
+        _disposed = true;
+        _ = StopAsync();
     }
 }

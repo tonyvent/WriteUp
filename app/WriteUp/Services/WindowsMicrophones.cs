@@ -24,21 +24,12 @@ public static class WindowsMicrophones
         }
         catch { return null; }
     }
-    public static string RoutingDescription()
+    public static Input RequireSelected(string id)
     {
-        var input = Default(Role.Console); var communications = Default(Role.Communications);
-        return "Windows input: " + (input?.Name ?? "none") + "\nWindows communications input: " + (communications?.Name ?? "none");
-    }
-    public static void RequireSelected(string id)
-    {
-        if (string.IsNullOrEmpty(id)) return; // Older settings follow Windows until a device is chosen.
-        var selected = List().FirstOrDefault(d => d.Id == id)
+        if (string.IsNullOrEmpty(id))
+            throw new InvalidOperationException("Choose a microphone in WriteUp Settings before starting narration.");
+        return List().FirstOrDefault(d => d.Id == id)
             ?? throw new InvalidOperationException("Your selected microphone is disconnected or disabled. Select an available microphone in Settings.");
-        foreach (Role role in new[] { Role.Console, Role.Multimedia, Role.Communications })
-        {
-            if (Default(role)?.Id != id)
-                throw new InvalidOperationException("Selected microphone: " + selected.Name + ". Windows dictation is routed to a different input. In Windows input selection, set this microphone as both Default Device and Default Communications Device, then Refresh devices. " + RoutingDescription());
-        }
     }
 }
 

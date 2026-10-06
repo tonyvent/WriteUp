@@ -5,7 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../WriteUp/Models/AppSettings.cs" Link="AppSettings.cs" />
-    <Compile Include="../WriteUp/Services/MicrophoneStream.cs" Link="MicrophoneStream.cs" />
+    <Compile Include="../WriteUp/Services/SpeechTiming.cs" Link="SpeechTiming.cs" />
     <Compile Include="../WriteUp/Models/Step.cs" Link="Step.cs" />
     <Compile Include="../WriteUp/Models/SessionMeta.cs" Link="SessionMeta.cs" />
     <Compile Include="../WriteUp/Models/Annotation.cs" Link="Annotation.cs" />

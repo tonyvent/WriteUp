@@ -1,4 +1,4 @@
-# Development registration gives Windows dictation the package identity it requires.
+# Development registration gives Windows offline speech the package identity it requires.
 # It does not install certificates, change Windows policy, or download speech models.
 $ErrorActionPreference = 'Stop'
 $developerMode = 0
@@ -25,5 +25,5 @@ if (Test-Path (Join-Path $PSScriptRoot 'AppxManifest.xml')) {
 Add-AppxPackage -Register (Join-Path $layout 'AppxManifest.xml') -ForceApplicationShutdown
 $package = Get-AppxPackage -Name WriteUp.Desktop
 if (-not $package) { throw 'Windows app registration did not succeed.' }
-Write-Host 'WriteUp registered. Keep this folder in place. Launch WriteUp (Windows dictation) from Start.'
+Write-Host 'WriteUp registered. Keep this folder in place. Launch WriteUp (Offline speech) from Start.'
 Start-Process explorer.exe ('shell:AppsFolder\' + $package.PackageFamilyName + '!WriteUp')

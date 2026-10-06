@@ -26,35 +26,30 @@
                 <CheckBox x:Name="NarrationCheck" Margin="0,8,0,10">
                     <TextBlock Text="Listen and transcribe automatically when recording starts" TextWrapping="Wrap"/>
                 </CheckBox>
-                <TextBlock Text="Transcription provider" Margin="0,4,0,4"/>
-                <ComboBox x:Name="ProviderBox" SelectedIndex="0" Margin="0,0,0,10">
-                    <ComboBoxItem Content="Windows online dictation (recommended)" Tag="WindowsOnline"/>
-                    <ComboBoxItem Content="Windows legacy dictation (offline)" Tag="WindowsLegacy"/>
-                </ComboBox>
-                <TextBlock Text="Uses speech recognition supplied by Windows. No Azure key, subscription or separate model download. Online dictation sends speech to Microsoft's Windows service and requires internet and Online speech recognition enabled." TextWrapping="Wrap" Margin="0,0,0,8"/>
-                <TextBlock Text="Choose the microphone you want below. Windows online dictation requires that device to also be the Windows default input and communications input. WriteUp checks this before starting; it does not silently change Windows settings." TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <TextBlock Text="Windows offline speech · WriteUp 0.5.4" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <TextBlock Text="Uses the modern Windows on-device speech engine only. Audio stays on this PC. No keys, subscriptions, legacy engines or cloud fallback." TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <TextBlock Text="Requires Windows 11 24H2 or later and an installed Windows AI speech component. WriteUp will not download a model. This API is currently supplied through Microsoft's experimental SDK." TextWrapping="Wrap" Margin="0,0,0,8"/>
                 <WrapPanel>
-                    <Button Content="Windows speech settings" Click="SpeechSettings_Click" Margin="0,0,8,8"/>
+                    <Button x:Name="CheckSpeechBtn" Content="Check offline speech" Click="CheckSpeech_Click" Margin="0,0,8,8"/>
                     <Button Content="Microphone permissions" Click="MicrophoneSettings_Click" Margin="0,0,0,8"/>
                 </WrapPanel>
                 <TextBlock Text="Microphone" Margin="0,4,0,4"/>
                 <ComboBox x:Name="MicrophoneBox" Margin="0,0,0,10"/>
-                <TextBlock x:Name="InputRouting" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <TextBlock Text="Recognition uses this exact microphone, even when Windows has a different default input." TextWrapping="Wrap" Margin="0,0,0,8"/>
                 <WrapPanel>
                     <Button x:Name="InputTestBtn" Content="Test selected input level" Click="InputTest_Click" Margin="0,0,8,8"/>
-                    <Button Content="Windows input selection" Click="InputSelection_Click" Margin="0,0,0,8"/>
+                    <Button Content="Windows input settings" Click="InputSelection_Click" Margin="0,0,0,8"/>
                 </WrapPanel>
-                <TextBlock Text="Dictation language" Margin="0,4,0,4"/>
-                <ComboBox x:Name="LanguageBox" Margin="0,0,0,10"/>
+                <TextBlock Text="Language is supplied by the Windows offline speech model." TextWrapping="Wrap" Margin="0,4,0,10"/>
                 <WrapPanel>
                     <Button x:Name="TestMicBtn" Content="Test transcription" Click="TestMic_Click" Margin="0,0,8,8"/>
                     <Button Content="Refresh devices" Click="RefreshDevices_Click" Margin="0,0,8,8"/>
                     <Button Content="Windows sound settings" Click="SoundSettings_Click" Margin="0,0,8,8"/>
                 </WrapPanel>
                 <ProgressBar x:Name="MicLevel" Minimum="0" Maximum="100" Height="10" Margin="0,0,0,8"/>
-                <TextBlock x:Name="MicStatus" Text="Test the selected microphone and language before recording." TextWrapping="Wrap"/>
+                <TextBlock x:Name="MicStatus" Text="Check offline speech, then test transcription before recording." TextWrapping="Wrap"/>
                 <TextBlock x:Name="TestTranscript" TextWrapping="Wrap" Margin="0,8,0,0" FontWeight="SemiBold"/>
-                <TextBlock Text="Test Windows dictation before recording. If online speech is unavailable, check Windows privacy settings, connection and app registration. Legacy dictation is an optional lower-accuracy offline fallback." TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0"/>
+                <TextBlock Text="If the Windows component is missing or unsupported, narration stops with its actual availability status. Screenshot recording remains available." TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0"/>
             </StackPanel>
         </Border>
         <Border Background="{StaticResource PanelBrush}" CornerRadius="10" Padding="14" Margin="0,0,0,10">

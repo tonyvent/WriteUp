@@ -3,7 +3,7 @@
 A real, shareable Windows app that records what you do — every click gets an
 annotated screenshot, what you type becomes a step — and turns it into a clean,
 branded write-up. It shows a **live preview** of the report as you go and exports
-to **PDF, Word, HTML, and Markdown**. Built in **C# / .NET 8 WPF**, with PDFsharp/MigraDoc for document export, System.Speech for local transcription,
+to **PDF, Word, HTML, and Markdown**. Built in **C# / .NET 8 WPF**, with PDFsharp/MigraDoc for document export, Windows AI Speech for local transcription,
 and NAudio for selecting a microphone.
 
 ## Open & run in Visual Studio
@@ -308,74 +308,53 @@ requests and compare the same microphone/script against Teams. Identical Teams
 accuracy is not guaranteed. Live Azure recognition needs a manual resource test.
 
 
-## 0.5.3 — built-in Windows dictation, no key or speech-model download
+## 0.5.4 — modern offline Windows speech only
 
-Azure Speech has been removed. Existing settings migrate to **Windows online
-dictation**, using `Windows.Media.SpeechRecognition` and its continuous dictation
-session. Audio goes to Microsoft's Windows speech service; internet, microphone
-permission and **Online speech recognition** in Windows privacy settings are
-required. No Azure account, API key, paid subscription or separate model is used.
-This is Windows' documented application dictation API; identical accuracy to
-Teams or the Win+H interface is not promised.
+Narration now uses `Microsoft.Windows.AI.Speech`, supplied by
+`Microsoft.WindowsAppSDK.AI` **2.5.4-experimental** (September 29, 2026).
+The previous `Windows.Media.SpeechRecognition` online API, `System.Speech`
+legacy engine, and single-phrase fallback have been removed. Old settings
+migrate to the single offline provider while preserving the saved endpoint ID.
 
-Microsoft requires package identity for this API. For development/testing:
+This API is currently experimental; a successful build is not proof of working
+recognition on a particular PC. It requires **Windows 11 24H2/build 26100 or
+later**, package identity, the `systemAIModels` capability, and a ready Windows
+AI speech model. The model is preinstalled on supported Copilot+ PCs; on CPU-only
+PCs Microsoft documents a one-time model download through Windows Update.
+**This build deliberately does not download any model**: it checks readiness and
+stops with the actual status when the component is missing or unsupported.
+Win+H and Voice Access have separate availability from this app API.
 
-1. Close WriteUp and enable **Developer Mode** in Windows Settings.
-2. Run **app/register-windows-app.cmd** from the source checkout. It builds and
-   registers a Windows app layout, then launches it. Alternatively, download the
-   **WriteUp-0.5.3-Windows-Dictation** Actions artifact, extract it to a permanent
-   folder, and run its **register-windows-app.cmd** (no .NET SDK needed).
-3. Launch **WriteUp (Windows dictation)** from Start thereafter. Keep its layout
-   folder in place; rerun registration after updating. No certificate or machine
-   policy is installed/changed by the script. If office policy blocks Developer
-   Mode, distribution requires an appropriately signed MSIX through your IT team.
-4. In Settings select **Windows online dictation**, open **Windows speech
-   settings**, enable Online speech recognition, then check microphone permission.
-5. Choose your microphone in WriteUp and use **Windows input selection** to make
-   it the Default Device and Default Communications Device; refresh the device list.
-6. Select the available dictation language, test the microphone and start capture.
-   Windows supplies partial/final text; final phrases use Windows' phrase-start
-   timestamps to attach to recorded steps. Stop waits for final recognition.
+### Build and run this version
 
-The portable single EXE and direct Visual Studio launch have no package identity.
-Use **Windows legacy dictation** there, or launch the registered app for online
-recognition. Windows **Win+H** also works directly in a focused editable text field,
-but does not provide automatic background narration while clicking other apps.
-Windows may end a dictation session after prolonged silence; WriteUp displays the
-state and lets you restart via Narrate. No silent switch back to legacy dictation
-occurs if online speech is unavailable.
+1. Close WriteUp. From the updated source, run `app/register-windows-app.cmd`.
+   It publishes the app with its Windows App SDK runtime libraries and registers
+   the package layout. Developer Mode is needed for this development registration.
+   Existing registration must be updated because this version adds the
+   `systemAIModels` capability. The script does not change Windows policies.
+2. Or download the **WriteUp-0.5.4-Windows-Offline-Speech** Actions artifact,
+   extract the entire folder, and run its `register-windows-app.cmd`.
+3. Launch **WriteUp (Offline speech)** from Start. In Settings, confirm the
+   **WriteUp 0.5.4** label, choose your actual microphone, and save.
+4. **Check offline speech** reports Windows model availability without downloading.
+   **Test selected input level** checks that exact microphone independently.
+   **Test transcription** loads the installed model and starts offline recognition.
+5. Start recording. Final phrases are attached to steps by their audio offset.
+   Stop waits for recognition to finish before disposing the engine.
 
-Validation: Windows compilation, core regression checks, API loading and layout
-checks run in CI. Live online recognition, microphone permissions and the Windows
-service's actual accuracy require testing on a signed-in Windows desktop.
+The selected endpoint is passed directly to `AudioConfiguration.FromAudioDevice`;
+Windows defaults do not need changing. Missing devices fail explicitly instead of
+silently selecting another input. Audio is processed locally; no key or subscription
+is used. No cloud/legacy/phrase fallback exists. A failure writes the engine,
+version, model readiness and native error to `%APPDATA%/WriteUp/speech-error.txt`.
 
-### Choosing and checking a microphone
+The older single-EXE/installer instructions above do **not** provide the registered
+layout needed by this speech engine. Use the complete offline-speech artifact.
 
-Settings now lists named Windows capture devices for online dictation and remembers
-an endpoint ID, rather than just a generic default label. **Test selected input
-level** opens that exact device directly and works independently of the speech
-service. **Test transcription** separately checks Windows dictation.
+Validation includes compilation, settings migration, transcript timing, WPF layout,
+and capture regression checks. Live speech accuracy and model loading require a
+supported Windows PC with the model installed; CI does not have a physical mic.
 
-The Windows dictation API has no per-app microphone argument. **Windows input
-selection** opens the Recording control panel: set the selected device as both
-Default Device and Default Communications Device, then click Refresh devices.
-WriteUp displays both Windows routes and refuses to start online narration when
-they differ from your selected device. It does not change system defaults for you.
-A disconnected saved device remains marked unavailable instead of silently falling
-back to another mic. Legacy Windows dictation retains direct per-device selection.
-
-### Continuous speech startup compatibility
-
-If continuous recognition fails at startup with `0x80131509`, WriteUp releases
-that recognizer and tries Windows' separate `RecognizeAsync` API with a fresh
-recognizer. It waits for Windows to report audio capture before marking the
-microphone on. This fallback still uses Windows online speech, without keys or
-model downloads; it is not the Win+H interface and is not a confirmed fix for
-every Windows installation.
-
-In **Windows phrase mode**, pause between phrases: audio is not captured while
-Windows processes the previous phrase. The recording status alternates between
-listening and transcribing. Final phrases retain their start timestamps for step
-attachment. Stop allows the current result to finish before disposing the service.
-If the fallback also fails, `speech-error.txt` includes both failures. Successful
-Win+H typing alone does not establish that either application API will work.
+References:
+- https://learn.microsoft.com/windows/ai/apis/speech-recognition
+- https://learn.microsoft.com/windows/apps/windows-app-sdk/release-notes/windows-app-sdk-2-0?pivots=experimental

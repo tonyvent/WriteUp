@@ -13,14 +13,13 @@ public class AppSettings
     public bool NarrationEnabled { get; set; } = true;
     public int MicrophoneDevice { get; set; } = -1;
     public string MicrophoneName { get; set; } = "";
-    public string TranscriptionProvider { get; set; } = "WindowsOnline";
+    public string TranscriptionProvider { get; set; } = "WindowsOfflineAI";
     public string WindowsMicrophoneId { get; set; } = "";
     public string WindowsMicrophoneName { get; set; } = "";
     public string WindowsSpeechLanguage { get; set; } = "en-US";
     public void UpgradeSpeechSettings()
     {
-        if (TranscriptionProvider != "WindowsLegacy" && TranscriptionProvider != "WindowsOnline")
-            TranscriptionProvider = "WindowsOnline";
+        TranscriptionProvider = "WindowsOfflineAI";
     }
     public string SpeechRecognizerId { get; set; } = "";
     public bool CaptureClicks { get; set; } = true;

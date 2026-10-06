@@ -107,8 +107,10 @@ internal static class Program
     {
         // Enumerating Windows' built-in dictation languages exercises the WinRT projection
         // without enabling online speech or recording a microphone in CI.
-        var nativeLanguages = Windows.Media.SpeechRecognition.SpeechRecognizer.SupportedTopicLanguages;
-        Console.WriteLine("PASS Windows dictation API loads: " + nativeLanguages.Count + " topic languages");
+        var speechApi = typeof(Microsoft.Windows.AI.Speech.SpeechRecognitionModelFactory);
+        if (speechApi.Assembly.GetName().Name != "Microsoft.Windows.AI.Speech.Projection")
+            throw new Exception("Wrong Windows speech API referenced");
+        Console.WriteLine("PASS modern offline speech projection loads (physical recognition requires Windows AI model)");
         var settings = new AppSettings { ShowGuidedTour = false, NarrationEnabled = false };
         SettingsStore.Save(settings);
         var main = Application.Current.Windows.OfType<MainWindow>().FirstOrDefault() ?? new MainWindow();
