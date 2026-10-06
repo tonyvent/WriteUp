@@ -18,6 +18,8 @@ internal sealed class WindowsNarration : IDisposable
     private readonly CancellationTokenSource _lifetime = new();
     private volatile bool _stopping, _listening, _disposed;
     private Task? _stop;
+    private Task? _phraseLoop;
+    private string _continuousFailure = "";
     public bool IsListening => _listening && !_stopping;
     public event Action<DateTime, string>? Transcribed;
     public event Action<string>? Hypothesis;
@@ -63,10 +65,10 @@ internal sealed class WindowsNarration : IDisposable
                 throw new InvalidOperationException("Windows dictation is unavailable (" + compilation.Status + "). Enable Online speech recognition and microphone access in Windows Settings, and check your internet connection.");
             _lifetime.Token.ThrowIfCancellationRequested();
             recognizer.ContinuousRecognitionSession.AutoStopSilenceTimeout = TimeSpan.FromMinutes(5);
-            recognizer.HypothesisGenerated += (_, e) => { if (!_disposed) Hypothesis?.Invoke(e.Hypothesis.Text); };
+            recognizer.HypothesisGenerated += (_, e) => { if (!_disposed && ReferenceEquals(_recognizer, recognizer)) Hypothesis?.Invoke(e.Hypothesis.Text); };
             recognizer.ContinuousRecognitionSession.ResultGenerated += (_, e) =>
             {
-                if (_disposed) return;
+                if (_disposed || !ReferenceEquals(_recognizer, recognizer)) return;
                 var result = e.Result;
                 if (result.Status == SpeechRecognitionResultStatus.Success && !string.IsNullOrWhiteSpace(result.Text))
                 {
@@ -78,9 +80,13 @@ internal sealed class WindowsNarration : IDisposable
                 Hypothesis?.Invoke("");
             };
             recognizer.RecognitionQualityDegrading += (_, e) =>
-                Status?.Invoke("Windows microphone quality: " + e.Problem + ". Check input volume and background noise.");
+            {
+                if (!_disposed && ReferenceEquals(_recognizer, recognizer))
+                    Status?.Invoke("Windows microphone quality: " + e.Problem + ". Check input volume and background noise.");
+            };
             recognizer.ContinuousRecognitionSession.Completed += (_, e) =>
             {
+                if (!ReferenceEquals(_recognizer, recognizer)) return;
                 _listening = false;
                 StopMeter();
                 if (!_stopping && !_disposed)
@@ -90,7 +96,27 @@ internal sealed class WindowsNarration : IDisposable
             stage = "starting microphone recognition";
             if (recognizer.State != SpeechRecognizerState.Idle)
                 throw new InvalidOperationException("Windows recognizer is not ready to start: " + recognizer.State);
-            await recognizer.ContinuousRecognitionSession.StartAsync().AsTask(_lifetime.Token);
+            try
+            {
+                stage = "requesting continuous recognition";
+                var start = recognizer.ContinuousRecognitionSession.StartAsync();
+                stage = "awaiting continuous recognition startup";
+                await start.AsTask(_lifetime.Token);
+            }
+            catch (Exception ex) when (!_stopping && !_disposed &&
+                unchecked((uint)WinRT.ExceptionHelpers.GetHRForException(ex)) == 0x80131509)
+            {
+                _continuousFailure = $"{stage}: {ex}";
+                // The failure does not establish that Windows voice typing is broken.
+                // Try the separately exposed single-phrase API once, using a fresh
+                // recognizer so the failed session cannot overlap this one.
+                stage = "starting Windows phrase recognition fallback";
+                _recognizer = null;
+                recognizer.Dispose();
+                await StartPhraseRecognitionAsync(language);
+                return;
+            }
+            _lifetime.Token.ThrowIfCancellationRequested();
             _listening = true;
             StartMeter();
             Status?.Invoke("Listening with Windows online dictation using your Windows default microphone. Speak naturally; phrases become step notes.");
@@ -107,7 +133,7 @@ internal sealed class WindowsNarration : IDisposable
             try
             {
                 diagnosticPath = Path.Combine(SettingsStore.AppDataDir, "speech-error.txt");
-                File.WriteAllText(diagnosticPath, $"Time: {DateTimeOffset.Now:O}\nStage: {stage}\nApp: {identity}\nState: {recognizerState}\nWindows: {Environment.OSVersion}\nNative HRESULT: 0x{code:X8}\nCLR HRESULT: 0x{ex.HResult:X8}\n{ex}");
+                File.WriteAllText(diagnosticPath, $"Time: {DateTimeOffset.Now:O}\nStage: {stage}\nApp: {identity}\nState: {recognizerState}\nWindows: {Environment.OSVersion}\nNative HRESULT: 0x{code:X8}\nCLR HRESULT: 0x{ex.HResult:X8}\n{ex}\nOriginal continuous failure: {_continuousFailure}");
             }
             catch { diagnosticPath = ""; }
             Dispose();
@@ -115,11 +141,90 @@ internal sealed class WindowsNarration : IDisposable
             {
                 0x80045509 => "Windows has not accepted online speech access. Click Windows speech settings, turn Online speech recognition on, then test again.",
                 0x80070005 => "Windows denied access. Click Microphone permissions and allow microphone access for apps and desktop apps.",
-                _ => "Check Online speech recognition, microphone permissions and the internet connection."
+                _ => "WriteUp could not start the Windows speech API. Win+H can work independently of this API; share the diagnostic file to investigate this failure."
             };
             if (identity == "unpackaged")
                 help += " This is the unregistered EXE/Visual Studio launch. Run app\\register-windows-app.cmd, then launch WriteUp (Windows dictation) from Start.";
             throw new InvalidOperationException($"Windows dictation failed while {stage}. Error 0x{code:X8}. App: {identity}. State: {recognizerState}.\n{help}\nWindows detail: {ex.Message}\nDiagnostic file: {diagnosticPath}", ex);
+        }
+    }
+    private async Task StartPhraseRecognitionAsync(Language language)
+    {
+        var recognizer = new SpeechRecognizer(language);
+        _recognizer = recognizer;
+        recognizer.Constraints.Add(new SpeechRecognitionTopicConstraint(SpeechRecognitionScenario.Dictation, "dictation"));
+        var compiled = await recognizer.CompileConstraintsAsync().AsTask(_lifetime.Token);
+        if (compiled.Status != SpeechRecognitionResultStatus.Success)
+            throw new InvalidOperationException("Windows phrase recognition compilation failed: " + compiled.Status);
+        recognizer.Timeouts.InitialSilenceTimeout = TimeSpan.FromSeconds(6);
+        recognizer.Timeouts.EndSilenceTimeout = TimeSpan.FromSeconds(1.2);
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        recognizer.StateChanged += (_, e) =>
+        {
+            if (_disposed || _stopping) return;
+            if (e.State == SpeechRecognizerState.Capturing)
+            {
+                ready.TrySetResult();
+                Status?.Invoke("Windows phrase mode: listening. Pause between phrases while each is transcribed.");
+            }
+            else if (e.State == SpeechRecognizerState.Processing)
+                Status?.Invoke("Windows phrase mode: transcribing — wait for Listening before speaking again.");
+        };
+        recognizer.HypothesisGenerated += (_, e) => { if (!_disposed) Hypothesis?.Invoke(e.Hypothesis.Text); };
+        _phraseLoop = RunPhraseLoopAsync(recognizer, ready);
+        // Do not report microphone ON merely because RecognizeAsync returned an
+        // operation. Windows must first report that it is capturing audio.
+        await ready.Task.WaitAsync(TimeSpan.FromSeconds(15), _lifetime.Token);
+        _lifetime.Token.ThrowIfCancellationRequested();
+        if (_phraseLoop.IsCompleted)
+            throw new InvalidOperationException("Windows phrase recognition ended during startup.");
+        _listening = true;
+        StartMeter();
+    }
+    private async Task RunPhraseLoopAsync(SpeechRecognizer recognizer, TaskCompletionSource ready)
+    {
+        try
+        {
+            while (!_stopping && !_disposed)
+            {
+                var result = await recognizer.RecognizeAsync().AsTask(_lifetime.Token);
+                if (_disposed) break;
+                if (result.Status == SpeechRecognitionResultStatus.Success)
+                {
+                    if (!string.IsNullOrWhiteSpace(result.Text))
+                    {
+                        var at = result.PhraseStartTime.LocalDateTime;
+                        if (at.Year < 2000) at = DateTime.Now - result.PhraseDuration;
+                        Transcribed?.Invoke(at, result.Text);
+                    }
+                }
+                else if (result.Status != SpeechRecognitionResultStatus.TimeoutExceeded && !_stopping)
+                    throw new InvalidOperationException("Windows phrase recognition failed: " + result.Status);
+                Hypothesis?.Invoke("");
+                // Bound retries even if Windows returns silence immediately.
+                if (!_stopping) await Task.Delay(100, _lifetime.Token);
+            }
+        }
+        catch (Exception ex)
+        {
+            ready.TrySetException(ex);
+            if (!_stopping && !_disposed)
+            {
+                try
+                {
+                    File.WriteAllText(Path.Combine(SettingsStore.AppDataDir, "speech-error.txt"),
+                        $"Time: {DateTimeOffset.Now:O}\nStage: Windows phrase recognition\nWindows: {Environment.OSVersion}\n{ex}\nOriginal continuous failure: {_continuousFailure}");
+                }
+                catch { }
+                Status?.Invoke("Windows phrase recognition stopped: " + ex.Message + ". Screenshots continue. Diagnostic: speech-error.txt");
+            }
+        }
+        finally
+        {
+            ready.TrySetCanceled();
+            _listening = false;
+            StopMeter();
+            if (!_disposed) Ended?.Invoke();
         }
     }
     private void StartMeter()
@@ -143,7 +248,13 @@ internal sealed class WindowsNarration : IDisposable
         _stopping = true;
         try
         {
-            if (_recognizer != null && _listening)
+            if (_recognizer != null && _phraseLoop != null && _listening)
+            {
+                if (_recognizer.State != SpeechRecognizerState.Idle)
+                    await _recognizer.StopRecognitionAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10));
+                await _phraseLoop.WaitAsync(TimeSpan.FromSeconds(10));
+            }
+            else if (_recognizer != null && _listening)
                 await _recognizer.ContinuousRecognitionSession.StopAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10));
             else _lifetime.Cancel();
         }

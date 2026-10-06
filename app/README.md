@@ -331,8 +331,8 @@ Microsoft requires package identity for this API. For development/testing:
    Mode, distribution requires an appropriately signed MSIX through your IT team.
 4. In Settings select **Windows online dictation**, open **Windows speech
    settings**, enable Online speech recognition, then check microphone permission.
-5. Set your default input in **Windows sound settings**. Online dictation uses
-   that Windows microphone; the app's per-device selector is for legacy dictation.
+5. Choose your microphone in WriteUp and use **Windows input selection** to make
+   it the Default Device and Default Communications Device; refresh the device list.
 6. Select the available dictation language, test the microphone and start capture.
    Windows supplies partial/final text; final phrases use Windows' phrase-start
    timestamps to attach to recorded steps. Stop waits for final recognition.
@@ -363,3 +363,19 @@ WriteUp displays both Windows routes and refuses to start online narration when
 they differ from your selected device. It does not change system defaults for you.
 A disconnected saved device remains marked unavailable instead of silently falling
 back to another mic. Legacy Windows dictation retains direct per-device selection.
+
+### Continuous speech startup compatibility
+
+If continuous recognition fails at startup with `0x80131509`, WriteUp releases
+that recognizer and tries Windows' separate `RecognizeAsync` API with a fresh
+recognizer. It waits for Windows to report audio capture before marking the
+microphone on. This fallback still uses Windows online speech, without keys or
+model downloads; it is not the Win+H interface and is not a confirmed fix for
+every Windows installation.
+
+In **Windows phrase mode**, pause between phrases: audio is not captured while
+Windows processes the previous phrase. The recording status alternates between
+listening and transcribing. Final phrases retain their start timestamps for step
+attachment. Stop allows the current result to finish before disposing the service.
+If the fallback also fails, `speech-error.txt` includes both failures. Successful
+Win+H typing alone does not establish that either application API will work.
