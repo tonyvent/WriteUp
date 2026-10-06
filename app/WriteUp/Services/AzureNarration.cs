@@ -142,7 +142,7 @@ internal sealed class AzureNarration : IDisposable
         _audio?.Dispose(); _audio = null;
         _input?.Dispose(); _input = null;
         _format?.Dispose(); _format = null;
-        _config?.Dispose(); _config = null;
+        _config = null; // SpeechConfig does not implement IDisposable.
         _finished = true;
         _ended.TrySetResult(true);
         AudioLevel?.Invoke(0);
