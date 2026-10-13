@@ -9,6 +9,30 @@ public partial class App : Application
 {
     protected override async void OnStartup(StartupEventArgs e)
     {
+        if (e.Args.Contains("--speech-runtime-test"))
+        {
+            StartupUri = null; ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            base.OnStartup(e);
+            if (!WindowsAppLaunch.HasIdentity)
+            {
+                if (await WindowsAppLaunch.ActivateRegisteredAsync("--speech-runtime-test")) { Shutdown(); return; }
+            }
+            try
+            {
+                if (!WindowsAppLaunch.HasIdentity) throw new InvalidOperationException(WindowsAppLaunch.RegistrationError);
+                var ready = Microsoft.Windows.AI.Speech.SpeechRecognitionModelFactory.Default.GetReadyState();
+                System.IO.File.WriteAllText(System.IO.Path.Combine(AppContext.BaseDirectory, "speech-runtime-test.json"),
+                    System.Text.Json.JsonSerializer.Serialize(new { success = true, identity = Windows.ApplicationModel.Package.Current.Id.FullName, readiness = ready.ToString() }));
+                Shutdown(0);
+            }
+            catch (Exception ex)
+            {
+                System.IO.File.WriteAllText(System.IO.Path.Combine(AppContext.BaseDirectory, "speech-runtime-test.json"),
+                    System.Text.Json.JsonSerializer.Serialize(new { success = false, error = ex.ToString() }));
+                Shutdown(1);
+            }
+            return;
+        }
         // Test hosts instantiate App too; only the actual desktop EXE hands off.
         if (Assembly.GetEntryAssembly()?.GetName().Name != "WriteUp" || WindowsAppLaunch.HasIdentity ||
             !OperatingSystem.IsWindowsVersionAtLeast(10, 0, 26100))

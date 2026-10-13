@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows;
 
 namespace WriteUp.Services;
@@ -15,7 +16,7 @@ internal static class WindowsAppLaunch
 
     // Use the same registered app layout as the Windows build, even when the
     // user double-clicks the EXE or starts it from Visual Studio.
-    public static async Task<bool> ActivateRegisteredAsync()
+    public static async Task<bool> ActivateRegisteredAsync(string arguments = "")
     {
         if (HasIdentity || !OperatingSystem.IsWindowsVersionAtLeast(10, 0, 26100)) return false;
         try
@@ -51,7 +52,10 @@ internal static class WindowsAppLaunch
             if (process.ExitCode != 0) throw new InvalidOperationException(await error);
             if (!family.StartsWith("WriteUp.Desktop_", StringComparison.Ordinal) || family.Any(char.IsWhiteSpace))
                 throw new InvalidOperationException("Windows returned an invalid app identity.");
-            Process.Start(new ProcessStartInfo("explorer.exe", "shell:AppsFolder\\" + family + "!WriteUp") { UseShellExecute = true });
+            var manager = (IApplicationActivationManager)Activator.CreateInstance(
+                Type.GetTypeFromCLSID(new Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C"))!)!;
+            try { Marshal.ThrowExceptionForHR(manager.ActivateApplication(family + "!WriteUp", arguments, 0, out _)); }
+            finally { Marshal.ReleaseComObject(manager); }
             return true;
         }
         catch (Exception ex)
@@ -84,4 +88,12 @@ internal static class WindowsAppLaunch
             bitmap.Save(Path.Combine(assets, name), System.Drawing.Imaging.ImageFormat.Png);
         }
     }
+    [ComImport, Guid("2E941141-7F97-4756-BA1D-9DECDE894A3D"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IApplicationActivationManager
+    {
+        [PreserveSig]
+        int ActivateApplication([MarshalAs(UnmanagedType.LPWStr)] string appId,
+            [MarshalAs(UnmanagedType.LPWStr)] string arguments, uint options, out uint processId);
+    }
+
 }
