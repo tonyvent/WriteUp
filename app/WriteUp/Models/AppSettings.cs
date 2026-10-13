@@ -11,17 +11,13 @@ public class AppSettings
     public string DefaultLogoPath { get; set; } = "";
     public bool AlwaysOnTop { get; set; } = true;
     public bool NarrationEnabled { get; set; } = true;
-    public int MicrophoneDevice { get; set; } = -1;
-    public string MicrophoneName { get; set; } = "";
     public string TranscriptionProvider { get; set; } = "WindowsOfflineAI";
     public string WindowsMicrophoneId { get; set; } = "";
     public string WindowsMicrophoneName { get; set; } = "";
-    public string WindowsSpeechLanguage { get; set; } = "en-US";
     public void UpgradeSpeechSettings()
     {
         TranscriptionProvider = "WindowsOfflineAI";
     }
-    public string SpeechRecognizerId { get; set; } = "";
     public bool CaptureClicks { get; set; } = true;
     public bool CaptureTyping { get; set; } = true;
     public bool CaptureScrolling { get; set; } = true;

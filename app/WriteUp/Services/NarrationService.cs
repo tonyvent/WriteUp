@@ -6,7 +6,7 @@ using WriteUp.Models;
 
 namespace WriteUp.Services;
 
-/// <summary>Modern on-device Windows AI speech only. Never downloads a model or selects another engine.</summary>
+/// <summary>Modern on-device Windows AI speech only. Uses only the Windows-managed speech model; setup is explicitly requested in Settings.</summary>
 public sealed class NarrationService : IDisposable
 {
     private readonly SemaphoreSlim _operations = new(1, 1);
@@ -14,6 +14,7 @@ public sealed class NarrationService : IDisposable
     private readonly object _stopLock = new();
     private SpeechRecognitionModel? _model;
     private StreamingRecognition? _recognition;
+    private AudioConfiguration? _audioConfig;
     private MMDevice? _microphone;
     private System.Threading.Timer? _meter;
     private Task? _startup, _stop;
@@ -27,6 +28,18 @@ public sealed class NarrationService : IDisposable
     public event Action<int>? AudioLevel;
     public event Action? Ended;
 
+    public static async Task<string> PrepareAsync()
+    {
+        RequireWindowsPackage();
+        var factory = SpeechRecognitionModelFactory.Default;
+        var state = factory.GetReadyState();
+        if (state == AIFeatureReadyState.Ready) return CheckAvailability();
+        if (state == AIFeatureReadyState.NotSupportedOnCurrentSystem) RequireReady(state);
+        var result = await factory.EnsureReadyAsync();
+        if (result.Status != AIFeatureReadyResultState.Success)
+            throw new InvalidOperationException($"Windows could not prepare speech recognition: {result.Status}. {result.ExtendedError}");
+        return CheckAvailability();
+    }
     public static string CheckAvailability()
     {
         RequireWindowsPackage();
@@ -41,7 +54,7 @@ public sealed class NarrationService : IDisposable
         try { _ = Windows.ApplicationModel.Package.Current.Id.Name; }
         catch (Exception ex)
         {
-            throw new InvalidOperationException("Launch the registered WriteUp 0.5.4 app from Start. Run app\\register-windows-app.cmd after updating; the offline API requires app identity and the systemAIModels capability.", ex);
+            throw new InvalidOperationException("Launch the registered WriteUp 0.5.5 app from Start. Run app\\register-windows-app.cmd after updating; the offline API requires app identity and the systemAIModels capability.", ex);
         }
     }
     private static void RequireReady(AIFeatureReadyState state)
@@ -49,7 +62,7 @@ public sealed class NarrationService : IDisposable
         if (state == AIFeatureReadyState.Ready) return;
         if (state == AIFeatureReadyState.NotSupportedOnCurrentSystem)
             throw new InvalidOperationException("Windows reports that its offline AI speech API is not supported on this system. No other engine was started.");
-        throw new InvalidOperationException($"Windows offline speech model is not ready ({state}). This API requires Microsoft's on-device speech component. WriteUp has not downloaded anything and cannot transcribe until Windows makes that component available. Win+H or Voice Access working does not establish that this separate API's model is installed.");
+        throw new InvalidOperationException($"Windows offline speech model is not ready ({state}). This API requires Microsoft's on-device speech component. Open Settings and choose Set up Windows speech to let Windows prepare its optional speech component. Recording never downloads it automatically. Win+H or Voice Access working does not establish that this separate API's model is installed.");
     }
     public Task StartAsync(AppSettings? settings = null) => _startup ??= StartCoreAsync(settings ?? new AppSettings());
     private async Task StartCoreAsync(AppSettings settings)
@@ -73,6 +86,7 @@ public sealed class NarrationService : IDisposable
             _cancel.Token.ThrowIfCancellationRequested();
             _stage = "starting offline transcription";
             var config = AudioConfiguration.FromAudioDevice(input.Id);
+            _audioConfig = config;
             var recognition = new StreamingRecognition(config, _model);
             _recognition = recognition;
             recognition.Recognizing += (_, e) => { if (!_disposed) Hypothesis?.Invoke(e.Text); };
@@ -123,7 +137,7 @@ public sealed class NarrationService : IDisposable
         string path = Path.Combine(SettingsStore.AppDataDir, "speech-error.txt");
         try
         {
-            File.WriteAllText(path, $"Time: {DateTimeOffset.Now:O}\nWriteUp: 0.5.4\nEngine: Microsoft.Windows.AI.Speech (offline only)\nSDK: 2.5.4-experimental\nStage: {_stage}\nModel readiness: {_readyState}\nWindows: {Environment.OSVersion}\nHRESULT: 0x{ex.HResult:X8}\n{ex}");
+            File.WriteAllText(path, $"Time: {DateTimeOffset.Now:O}\nWriteUp: 0.5.5\nEngine: Microsoft.Windows.AI.Speech (offline only)\nSDK: 2.5.4-experimental\nStage: {_stage}\nModel readiness: {_readyState}\nWindows: {Environment.OSVersion}\nHRESULT: 0x{ex.HResult:X8}\n{ex}");
             return path;
         }
         catch { return "could not write diagnostic file"; }
@@ -165,6 +179,7 @@ public sealed class NarrationService : IDisposable
     {
         _meter?.Dispose(); _meter = null;
         try { _recognition?.Dispose(); } catch { } _recognition = null;
+        try { _audioConfig?.Dispose(); } catch { } _audioConfig = null;
         try { _model?.Dispose(); } catch { } _model = null;
         try { _microphone?.Dispose(); } catch { } _microphone = null;
     }

@@ -662,6 +662,7 @@ public partial class MainWindow : Window
         { if (ReferenceEquals(_narration, narration)) action(); }));
         narration.Transcribed += (at, text) => Dispatcher.BeginInvoke(new Action(() =>
         {
+            if (!ReferenceEquals(_narration, narration)) return;
             if (_stopping) _pendingNarration.Add((at, text));
             else _recorder?.AddNarration(at, text);
             _vm.LiveTranscript = "Transcribed: " + text;
@@ -669,7 +670,7 @@ public partial class MainWindow : Window
         narration.Hypothesis += text => Update(() => { if (text.Length > 0) _vm.LiveTranscript = "Hearing: " + text; });
         narration.AudioLevel += level => Update(() => _vm.AudioLevel = level);
         narration.Status += text => Update(() => _vm.RecordingNotice = text);
-        narration.Ended += () => Update(() => { _vm.MicrophoneLabel = "Microphone off"; _vm.AudioLevel = 0; _vm.AudioLevel = 0; });
+        narration.Ended += () => Update(() => { _vm.MicrophoneLabel = "Microphone off"; _vm.AudioLevel = 0; });
         try
         {
             await narration.StartAsync(_settings);

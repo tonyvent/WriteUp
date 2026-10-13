@@ -102,3 +102,23 @@ CI; test your own microphone and Speech resource before relying on a guide.
 Windows online-service recognition accuracy is not validated by CI. No model is
 downloaded by WriteUp. Developer registration is for test builds; managed company
 deployment needs signed packaging under the company's normal policy.
+
+
+## 0.5.5 — single Windows AI speech engine
+
+- [ ] Register the complete 0.5.5 app folder and launch from Start.
+- [ ] Settings shows 0.5.5; only Windows AI speech is available.
+- [ ] Check offline speech reports model readiness without a download.
+- [ ] If missing, Set up Windows speech explains the Windows-managed download; Cancel performs no setup.
+- [ ] Approve setup and wait; test transcription when readiness succeeds.
+- [ ] Pick a USB microphone different from the Windows default and test its input meter and transcription.
+- [ ] Save and restart: the same endpoint remains selected. Changing the Windows default does not change it.
+- [ ] Unplug that microphone: no other microphone is silently selected. Refresh and choose an available input.
+- [ ] Narration enabled with no available selected input prevents Save with a useful message.
+- [ ] Device controls cannot change the endpoint during transcription startup.
+- [ ] Stop while speaking and confirm the final phrase is attached to the correct step.
+- [ ] Close Settings during startup; reopen and test without errors.
+- [ ] At the minimum window size, controls wrap and content scrolls; Save and Cancel remain visible.
+
+CI validates build, regression checks, WPF layout and package manifest; real
+microphone transcription and Windows model preparation require manual testing.

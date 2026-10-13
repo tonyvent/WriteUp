@@ -308,7 +308,7 @@ requests and compare the same microphone/script against Teams. Identical Teams
 accuracy is not guaranteed. Live Azure recognition needs a manual resource test.
 
 
-## 0.5.4 — modern offline Windows speech only
+## 0.5.5 — modern offline Windows speech only
 
 Narration now uses `Microsoft.Windows.AI.Speech`, supplied by
 `Microsoft.WindowsAppSDK.AI` **2.5.4-experimental** (September 29, 2026).
@@ -321,8 +321,10 @@ recognition on a particular PC. It requires **Windows 11 24H2/build 26100 or
 later**, package identity, the `systemAIModels` capability, and a ready Windows
 AI speech model. The model is preinstalled on supported Copilot+ PCs; on CPU-only
 PCs Microsoft documents a one-time model download through Windows Update.
-**This build deliberately does not download any model**: it checks readiness and
-stops with the actual status when the component is missing or unsupported.
+Recording checks readiness and never downloads a model automatically.
+**Set up Windows speech** in Settings explicitly requests Windows preparation
+after a confirmation explaining the optional Windows Update download.
+No model is shipped with WriteUp; no other recognition engine is available.
 Win+H and Voice Access have separate availability from this app API.
 
 ### Build and run this version
@@ -332,11 +334,12 @@ Win+H and Voice Access have separate availability from this app API.
    the package layout. Developer Mode is needed for this development registration.
    Existing registration must be updated because this version adds the
    `systemAIModels` capability. The script does not change Windows policies.
-2. Or download the **WriteUp-0.5.4-Windows-Offline-Speech** Actions artifact,
+2. Or download the **WriteUp-0.5.5-Windows-Offline-Speech** Actions artifact,
    extract the entire folder, and run its `register-windows-app.cmd`.
 3. Launch **WriteUp (Offline speech)** from Start. In Settings, confirm the
-   **WriteUp 0.5.4** label, choose your actual microphone, and save.
+   **WriteUp 0.5.5** label, choose your actual microphone, and save.
 4. **Check offline speech** reports Windows model availability without downloading.
+   If it is missing, use **Set up Windows speech** and approve Windows preparation.
    **Test selected input level** checks that exact microphone independently.
    **Test transcription** loads the installed model and starts offline recognition.
 5. Start recording. Final phrases are attached to steps by their audio offset.

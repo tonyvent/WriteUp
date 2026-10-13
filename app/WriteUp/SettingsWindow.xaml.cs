@@ -13,6 +13,7 @@ public partial class SettingsWindow : Window
     private readonly AppSettings _settings;
     private NarrationService? _micTest;
     private MicrophoneLevelTest? _inputTest;
+    private bool _audioBusy, _closed;
 
     /// <summary>Set when the user clicked "Show tour now".</summary>
     public bool TourRequested { get; private set; }
@@ -31,7 +32,7 @@ public partial class SettingsWindow : Window
         CompactCheck.IsChecked = settings.CompactWhileRecording;
         LoadDevices();
         SetAudioEnabled(true);
-        Closed += (_, _) => { _inputTest?.Dispose(); _inputTest = null; _micTest?.Dispose(); _micTest = null; };
+        Closed += (_, _) => { _closed = true; _inputTest?.Dispose(); _inputTest = null; _micTest?.Dispose(); _micTest = null; };
     }
 
     private bool Apply()
@@ -43,6 +44,11 @@ public partial class SettingsWindow : Window
             return false;
         }
         var selected = SelectedAudio();
+        if (NarrationCheck.IsChecked == true)
+        {
+            try { WindowsMicrophones.RequireSelected(selected.WindowsMicrophoneId); }
+            catch (Exception ex) { MicStatus.Text = ex.Message; return false; }
+        }
         _settings.TranscriptionProvider = selected.TranscriptionProvider;
         _settings.WindowsMicrophoneId = selected.WindowsMicrophoneId;
         _settings.WindowsMicrophoneName = selected.WindowsMicrophoneName;
@@ -58,12 +64,14 @@ public partial class SettingsWindow : Window
 
     private async void Save_Click(object sender, RoutedEventArgs e)
     {
+        if (_audioBusy) { MicStatus.Text = "Wait for speech setup or startup to finish before saving."; return; }
         await StopTest();
         if (Apply()) DialogResult = true;
     }
 
     private async void ShowTourNow_Click(object sender, RoutedEventArgs e)
     {
+        if (_audioBusy) { MicStatus.Text = "Wait for speech setup or startup to finish before saving."; return; }
         await StopTest();
         if (!Apply()) return;
         TourRequested = true;
@@ -134,13 +142,44 @@ public partial class SettingsWindow : Window
     private void SetAudioEnabled(bool enabled)
     {
         MicrophoneBox.IsEnabled = InputTestBtn.IsEnabled = CheckSpeechBtn.IsEnabled = enabled;
+        PrepareSpeechBtn.IsEnabled = RefreshDevicesBtn.IsEnabled = DefaultInputBtn.IsEnabled = enabled;
+    }
+    private void Microphone_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (SelectedInputText == null) return;
+        SelectedInputText.Text = MicrophoneBox.SelectedItem is WindowsMicrophones.Input input
+            ? "Selected input: " + input.Name : "No microphone selected.";
+        if (!_audioBusy && _micTest == null && _inputTest == null)
+        { MicLevel.Value = 0; TestTranscript.Text = "Test results appear here."; }
+    }
+    private void DefaultInput_Click(object sender, RoutedEventArgs e)
+    {
+        var input = WindowsMicrophones.Default(NAudio.CoreAudioApi.Role.Console);
+        if (input == null) { MicStatus.Text = "Windows has no active default microphone."; return; }
+        LoadDevices(input.Id);
+        MicStatus.Text = "Selected " + input.Name + ". This device will stay selected if the Windows default changes.";
+    }
+    private async void PrepareSpeech_Click(object sender, RoutedEventArgs e)
+    {
+        if (_audioBusy) return;
+        if (MessageBox.Show(this,
+            "Prepare the Windows speech recognition component? If it is missing, Windows may download it through Windows Update. Audio stays on this PC. You can remove the component later in Settings > System > AI Components.",
+            "Set up Windows speech", MessageBoxButton.OKCancel, MessageBoxImage.Information) != MessageBoxResult.OK) return;
+        await StopTest();
+        _audioBusy = true; SetAudioEnabled(false); TestMicBtn.IsEnabled = false;
+        MicStatus.Text = "Windows is preparing speech recognition… Download progress is available in Windows Update.";
+        MicLevel.IsIndeterminate = true;
+        try { MicStatus.Text = await NarrationService.PrepareAsync(); }
+        catch (Exception ex) { MicStatus.Text = ex.Message; }
+        finally { _audioBusy = false; MicLevel.IsIndeterminate = false; SetAudioEnabled(true); TestMicBtn.IsEnabled = true; }
     }
     private async void CheckSpeech_Click(object sender, RoutedEventArgs e)
     {
-        CheckSpeechBtn.IsEnabled = false;
+        if (_audioBusy) return;
+        _audioBusy = true; SetAudioEnabled(false); TestMicBtn.IsEnabled = false;
         try { MicStatus.Text = await Task.Run(NarrationService.CheckAvailability); }
         catch (Exception ex) { MicStatus.Text = ex.Message; }
-        finally { CheckSpeechBtn.IsEnabled = true; }
+        finally { _audioBusy = false; SetAudioEnabled(true); TestMicBtn.IsEnabled = true; }
     }
     private async Task StopTest()
     {
@@ -152,11 +191,12 @@ public partial class SettingsWindow : Window
     }
     private async void TestMic_Click(object sender, RoutedEventArgs e)
     {
+        if (_audioBusy) return;
         if (_micTest != null && !_micTest.IsListening) await StopTest();
         if (_micTest != null) { await StopTest(); return; }
         await StopTest();
         var test = new NarrationService(); _micTest = test;
-        void Update(Action action) => Dispatcher.BeginInvoke(new Action(() => { if (ReferenceEquals(_micTest, test)) action(); }));
+        void Update(Action action) => Dispatcher.BeginInvoke(new Action(() => { if (!_closed && ReferenceEquals(_micTest, test)) action(); }));
         test.Status += text => Update(() => MicStatus.Text = text);
         test.AudioLevel += level => Update(() => MicLevel.Value = level);
         test.Hypothesis += text => Update(() => { if (text.Length > 0) TestTranscript.Text = "Hearing: " + text; });
@@ -165,20 +205,23 @@ public partial class SettingsWindow : Window
         try
         {
             TestTranscript.Text = "";
-            SetAudioEnabled(false); TestMicBtn.IsEnabled = false;
+            _audioBusy = true; SetAudioEnabled(false); TestMicBtn.IsEnabled = false;
             await test.StartAsync(SelectedAudio());
+            if (_closed) { await test.StopAsync(); return; }
             TestMicBtn.Content = "Stop microphone test";
         }
         catch (Exception ex) { await StopTest(); MicStatus.Text = ex.Message; }
-        finally { TestMicBtn.IsEnabled = true; }
+        finally { _audioBusy = false; TestMicBtn.IsEnabled = true; }
     }
     private async void RefreshDevices_Click(object sender, RoutedEventArgs e)
     {
+        if (_audioBusy) return;
         var selected = SelectedAudio(); await StopTest();
         LoadDevices(selected.WindowsMicrophoneId);
     }
     private async void InputTest_Click(object sender, RoutedEventArgs e)
     {
+        if (_audioBusy) return;
         if (_inputTest != null) { await StopTest(); return; }
         await StopTest();
         if (MicrophoneBox.SelectedItem is not WindowsMicrophones.Input input) { MicStatus.Text = "Select an available microphone first."; return; }
