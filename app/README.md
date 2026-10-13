@@ -385,3 +385,16 @@ attempt offers Windows-managed preparation with consent. No model is bundled and
 no alternative engine is used. Internal native diagnostics remain in speech-error.txt.
 CI covers sample-level calculations and existing Windows build/layout/capture
 checks. Physical microphone recognition still requires a supported Windows PC.
+
+
+## 0.5.8 — Windows app launch and recognized results
+
+The desktop EXE now prepares the same Windows app layout as the registered build
+and activates it automatically when started without package identity. This fixes
+the direct-EXE launch path that cannot use Windows AI speech. Windows registration
+policy still applies; the app does not enable Developer Mode or alter company
+policy. Registration failures are saved internally and shown as a short status.
+Recognized results are consumed as in Microsoft's streaming example, without
+discarding text based on IsFinal. The Windows regression suite validates the
+embedded manifest, required capability, and generated app icons. Real speech
+recognition and package registration policy must be verified on a Windows client.

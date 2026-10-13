@@ -105,6 +105,15 @@ internal static class Program
     }
     private static async Task RunChecks()
     {
+        var layout = Path.Combine(Temp, "app-layout"); Directory.CreateDirectory(layout);
+        var launch = typeof(WriteUp.App).Assembly.GetType("WriteUp.Services.WindowsAppLaunch")!;
+        launch.GetMethod("WriteLayout", BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, new object[] { layout });
+        var manifest = System.Xml.Linq.XDocument.Load(Path.Combine(layout, "AppxManifest.xml"));
+        if (!manifest.Descendants().Any(x => (string?)x.Attribute("Name") == "systemAIModels"))
+            throw new Exception("Automatic app layout lacks Windows AI capability");
+        foreach (var image in new[] { "StoreLogo.png", "Logo150.png", "Logo44.png" })
+            if (!File.Exists(Path.Combine(layout, "Assets", image))) throw new Exception("Package asset missing: " + image);
+        Console.WriteLine("PASS automatic Windows identity layout includes speech capability and app assets");
         // Enumerating Windows' built-in dictation languages exercises the WinRT projection
         // without enabling online speech or recording a microphone in CI.
         var speechApi = typeof(Microsoft.Windows.AI.Speech.SpeechRecognitionModelFactory);

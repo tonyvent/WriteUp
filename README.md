@@ -16,7 +16,7 @@ Inventor, Revit, SolidWorks, etc.) and are tired of writing the docs by hand.
 > - **Windows desktop app** — a real point-and-click app with a
 >   Start/Stop button, live editable steps, and one-click export. Open
 >   [`app/WriteUp.sln`](app/) in Visual Studio 2022, or see
->   [`app/README.md`](app/README.md). Built in C# / .NET 8 WPF. **Version 0.5.7** uses only Windows AI
+>   [`app/README.md`](app/README.md). Built in C# / .NET 8 WPF. **Version 0.5.8** uses only Windows AI
 >   speech on Windows 11 24H2 or newer. Download the complete Windows app artifact,
 >   run `register-windows-app.cmd`, then launch from Start. See the current
 >   [setup instructions](app/README.md#build-and-run-this-version).

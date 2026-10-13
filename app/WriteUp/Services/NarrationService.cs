@@ -35,7 +35,7 @@ public sealed class NarrationService : IDisposable
         try { _ = Windows.ApplicationModel.Package.Current.Id.Name; }
         catch (Exception ex)
         {
-            throw new InvalidOperationException("Launch the registered WriteUp 0.5.7 app from Start. Run app\\register-windows-app.cmd after updating; the offline API requires app identity and the systemAIModels capability.", ex);
+            throw new InvalidOperationException(WindowsAppLaunch.RegistrationError ?? "Windows app registration is required for transcription.", ex);
         }
     }
     private static void RequireReady(AIFeatureReadyState state)
@@ -95,7 +95,9 @@ public sealed class NarrationService : IDisposable
             recognition.Recognizing += (_, e) => { if (!_disposed) Hypothesis?.Invoke(e.Text); };
             recognition.Recognized += (_, e) =>
             {
-                if (_disposed || !e.IsFinal || string.IsNullOrWhiteSpace(e.Text)) return;
+                if (_disposed || string.IsNullOrWhiteSpace(e.Text)) return;
+                // Follow Microsoft's sample: consume Recognized events directly.
+                // IsFinal must not be used to suppress recognized phrase text.
                 // Windows reports the phrase offset relative to this audio session.
                 var at = SpeechTiming.PhraseTime(_started, DateTime.Now, e.Offset);
                 Transcribed?.Invoke(at, e.Text);
@@ -134,7 +136,7 @@ public sealed class NarrationService : IDisposable
             string message = _readyState == "NotSupportedOnCurrentSystem"
                 ? "Windows transcription is not supported on this PC."
                 : _stage == "checking Windows offline speech"
-                ? "Transcription cannot start in this copy of WriteUp."
+                ? WindowsAppLaunch.RegistrationError ?? "Windows transcription could not initialize."
                 : _stage == "preparing Windows speech" ? "Windows could not finish setting up transcription."
                 : _stage == "opening selected microphone" ? "The selected microphone is unavailable. Choose another microphone."
                 : "Transcription could not start. Check microphone access in Windows Settings.";
@@ -147,7 +149,7 @@ public sealed class NarrationService : IDisposable
         string path = Path.Combine(SettingsStore.AppDataDir, "speech-error.txt");
         try
         {
-            File.WriteAllText(path, $"Time: {DateTimeOffset.Now:O}\nWriteUp: 0.5.7\nEngine: Microsoft.Windows.AI.Speech (offline only)\nSDK: 2.5.4-experimental\nStage: {_stage}\nModel readiness: {_readyState}\nWindows: {Environment.OSVersion}\nHRESULT: 0x{ex.HResult:X8}\n{ex}");
+            File.WriteAllText(path, $"Time: {DateTimeOffset.Now:O}\nWriteUp: 0.5.8\nEngine: Microsoft.Windows.AI.Speech (offline only)\nSDK: 2.5.4-experimental\nStage: {_stage}\nModel readiness: {_readyState}\nWindows: {Environment.OSVersion}\nHRESULT: 0x{ex.HResult:X8}\n{ex}");
             return path;
         }
         catch { return "could not write diagnostic file"; }
