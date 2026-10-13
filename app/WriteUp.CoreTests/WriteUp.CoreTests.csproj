@@ -4,6 +4,7 @@
     <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../WriteUp/Services/AudioPeak.cs" Link="AudioPeak.cs" />
     <Compile Include="../WriteUp/Models/AppSettings.cs" Link="AppSettings.cs" />
     <Compile Include="../WriteUp/Services/SpeechTiming.cs" Link="SpeechTiming.cs" />
     <Compile Include="../WriteUp/Models/Step.cs" Link="Step.cs" />

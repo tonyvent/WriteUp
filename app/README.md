@@ -372,3 +372,16 @@ instructions are removed from the user interface. Speech startup errors remain
 in the internal diagnostic log; users see a short status. Windows AI remains
 the only transcription engine. Download **WriteUp-0.5.6-Windows-Offline-Speech**
 from Actions and register the complete folder using the existing script.
+
+
+## 0.5.7 — real microphone and transcription test
+
+**Test microphone** now captures input samples for the live meter and starts the
+same Windows AI transcription service used while recording. Spoken words appear
+in Settings; no success is shown until a phrase is actually recognized. No-audio
+and silent-input checks report an actionable result instead of a frozen meter.
+If the optional Windows speech component is missing, the first transcription
+attempt offers Windows-managed preparation with consent. No model is bundled and
+no alternative engine is used. Internal native diagnostics remain in speech-error.txt.
+CI covers sample-level calculations and existing Windows build/layout/capture
+checks. Physical microphone recognition still requires a supported Windows PC.

@@ -45,12 +45,15 @@ internal sealed class MicrophoneLevelTest : IDisposable
         using var devices = new MMDeviceEnumerator();
         _device = devices.GetDevice(id);
         _capture = new WasapiCapture(_device);
-        _capture.DataAvailable += (_, _) =>
+        var format = _capture.WaveFormat;
+        bool floating = format.Encoding == WaveFormatEncoding.IeeeFloat ||
+            format is WaveFormatExtensible extended && extended.SubFormat == new Guid("00000003-0000-0010-8000-00aa00389b71");
+        _capture.DataAvailable += (_, e) =>
+            Level?.Invoke(AudioPeak.Level(e.Buffer, e.BytesRecorded, format.BitsPerSample, floating));
+        _capture.RecordingStopped += (_, e) =>
         {
-            try { Level?.Invoke((int)(_device.AudioMeterInformation.MasterPeakValue * 100)); }
-            catch { }
+            if (e.Exception != null) Failed?.Invoke(e.Exception.Message);
         };
-        _capture.RecordingStopped += (_, e) => { if (e.Exception != null) Failed?.Invoke(e.Exception.Message); };
         _capture.StartRecording();
     }
     public void Dispose()

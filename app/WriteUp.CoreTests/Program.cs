@@ -9,6 +9,11 @@ void Check(bool condition, string description)
     passed++;
     Console.WriteLine("PASS " + description);
 }
+Check(AudioPeak.Level(new byte[32], 32, 32, true) == 0, "Captured silent float audio produces zero level");
+Check(AudioPeak.Level(BitConverter.GetBytes(-0.5f), 4, 32, true) == 50, "Captured float amplitude drives microphone meter");
+Check(AudioPeak.Level(BitConverter.GetBytes((short)-16384), 2, 16, false) == 50, "PCM microphones drive the same input meter");
+Check(AudioPeak.Level(BitConverter.GetBytes(float.NaN), 4, 32, true) == 0, "Invalid samples do not break microphone test");
+Check(AudioPeak.Level(new byte[] {0, 0, 192}, 3, 24, false) == 50, "24-bit signed capture audio is measured correctly");
 var defaults = JsonSerializer.Deserialize<AppSettings>("{}");
 Check(defaults!.NarrationEnabled && defaults.CaptureClicks && defaults.CaptureTyping, "Old settings enable narration and action capture by default");
 var prefs = new AppSettings { WindowsMicrophoneId = "selected-usb-endpoint", WindowsMicrophoneName = "USB microphone", CaptureTyping = false };
