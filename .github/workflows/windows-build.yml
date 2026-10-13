@@ -29,6 +29,7 @@ jobs:
           & $makeappx.FullName pack /d artifacts/WindowsApp /p artifacts/WriteUp-validation.msix /o
           if ($LASTEXITCODE -ne 0) { throw "Package validation failed" }
       - name: Test registered speech runtime activation
+        timeout-minutes: 2
         shell: powershell
         run: |
           # This is an isolated hosted test runner, not the user's Windows PC.
@@ -36,12 +37,22 @@ jobs:
           New-Item -Path $key -Force | Out-Null
           New-ItemProperty -Path $key -Name AllowDevelopmentWithoutDevLicense -PropertyType DWord -Value 1 -Force | Out-Null
           $layout = (Resolve-Path artifacts/WindowsApp).Path
-          Start-Process (Join-Path $layout 'WriteUp.exe') -ArgumentList '--speech-runtime-test' -Wait
+          $probeStart = Get-Date
+          $process = Start-Process (Join-Path $layout 'WriteUp.exe') -ArgumentList '--speech-runtime-test' -Wait -PassThru
+          Write-Host "Probe launcher exit code: $($process.ExitCode)"
           $resultPath = Join-Path $layout 'speech-runtime-test.json'
           for ($i = 0; $i -lt 30 -and -not (Test-Path $resultPath); $i++) { Start-Sleep -Seconds 1 }
-          if (-not (Test-Path $resultPath)) { throw 'Registered speech runtime did not produce a result' }
+          if (-not (Test-Path $resultPath)) {
+            $diagnostic = Join-Path $env:APPDATA 'WriteUp/speech-error.txt'
+            if (Test-Path $diagnostic) { Get-Content $diagnostic }
+            Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $probeStart } -ErrorAction SilentlyContinue |
+              Where-Object { $_.ProviderName -in @('.NET Runtime', 'Application Error') } |
+              ForEach-Object { Write-Host $_.Message }
+            throw 'Registered speech runtime did not produce a result'
+          }
           $result = Get-Content $resultPath -Raw | ConvertFrom-Json
           if (-not $result.success) { throw $result.error }
+          Remove-Item $resultPath -Force
           Write-Host "PASS registered Windows AI speech runtime: $($result.identity), readiness $($result.readiness)"
       - uses: actions/upload-artifact@v4
         with:

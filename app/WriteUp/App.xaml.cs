@@ -9,8 +9,10 @@ public partial class App : Application
 {
     protected override async void OnStartup(StartupEventArgs e)
     {
-        if (e.Args.Contains("--speech-runtime-test"))
+        string probeFlag = System.IO.Path.Combine(AppContext.BaseDirectory, "speech-runtime-probe.pending");
+        if (e.Args.Contains("--speech-runtime-test") || System.IO.File.Exists(probeFlag))
         {
+            System.IO.File.WriteAllText(probeFlag, "pending");
             StartupUri = null; ShutdownMode = ShutdownMode.OnExplicitShutdown;
             base.OnStartup(e);
             if (!WindowsAppLaunch.HasIdentity)
@@ -23,12 +25,14 @@ public partial class App : Application
                 var ready = Microsoft.Windows.AI.Speech.SpeechRecognitionModelFactory.Default.GetReadyState();
                 System.IO.File.WriteAllText(System.IO.Path.Combine(AppContext.BaseDirectory, "speech-runtime-test.json"),
                     System.Text.Json.JsonSerializer.Serialize(new { success = true, identity = global::Windows.ApplicationModel.Package.Current.Id.FullName, readiness = ready.ToString() }));
+                System.IO.File.Delete(probeFlag);
                 Shutdown(0);
             }
             catch (Exception ex)
             {
                 System.IO.File.WriteAllText(System.IO.Path.Combine(AppContext.BaseDirectory, "speech-runtime-test.json"),
                     System.Text.Json.JsonSerializer.Serialize(new { success = false, error = ex.ToString() }));
+                System.IO.File.Delete(probeFlag);
                 Shutdown(1);
             }
             return;
