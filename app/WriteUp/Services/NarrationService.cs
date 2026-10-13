@@ -179,7 +179,7 @@ public sealed class NarrationService : IDisposable
     {
         _meter?.Dispose(); _meter = null;
         try { _recognition?.Dispose(); } catch { } _recognition = null;
-        try { _audioConfig?.Dispose(); } catch { } _audioConfig = null;
+        _audioConfig = null;
         try { _model?.Dispose(); } catch { } _model = null;
         try { _microphone?.Dispose(); } catch { } _microphone = null;
     }
