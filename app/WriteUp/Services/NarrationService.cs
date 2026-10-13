@@ -54,7 +54,7 @@ public sealed class NarrationService : IDisposable
         try { _ = Windows.ApplicationModel.Package.Current.Id.Name; }
         catch (Exception ex)
         {
-            throw new InvalidOperationException("Launch the registered WriteUp 0.5.5 app from Start. Run app\\register-windows-app.cmd after updating; the offline API requires app identity and the systemAIModels capability.", ex);
+            throw new InvalidOperationException("Launch the registered WriteUp 0.5.6 app from Start. Run app\\register-windows-app.cmd after updating; the offline API requires app identity and the systemAIModels capability.", ex);
         }
     }
     private static void RequireReady(AIFeatureReadyState state)
@@ -115,7 +115,7 @@ public sealed class NarrationService : IDisposable
                 {
                     if (!_stopping)
                     {
-                        Status?.Invoke(ex.Message + " Narration stopped; select a microphone in Settings.");
+                        Status?.Invoke(ex.Message + " Choose another microphone in Settings.");
                         _ = StopAsync();
                     }
                 }
@@ -127,8 +127,8 @@ public sealed class NarrationService : IDisposable
             _listening = false;
             ReleaseResources();
             if (_stopping && ex is OperationCanceledException) throw;
-            string path = WriteDiagnostic(ex);
-            throw new InvalidOperationException($"Windows offline speech failed while {_stage}. {ex.Message}\nDiagnostic: {path}", ex);
+            WriteDiagnostic(ex);
+            throw new InvalidOperationException("Transcription is unavailable right now. You can continue recording and add notes manually.", ex);
         }
         finally { _operations.Release(); }
     }
@@ -137,7 +137,7 @@ public sealed class NarrationService : IDisposable
         string path = Path.Combine(SettingsStore.AppDataDir, "speech-error.txt");
         try
         {
-            File.WriteAllText(path, $"Time: {DateTimeOffset.Now:O}\nWriteUp: 0.5.5\nEngine: Microsoft.Windows.AI.Speech (offline only)\nSDK: 2.5.4-experimental\nStage: {_stage}\nModel readiness: {_readyState}\nWindows: {Environment.OSVersion}\nHRESULT: 0x{ex.HResult:X8}\n{ex}");
+            File.WriteAllText(path, $"Time: {DateTimeOffset.Now:O}\nWriteUp: 0.5.6\nEngine: Microsoft.Windows.AI.Speech (offline only)\nSDK: 2.5.4-experimental\nStage: {_stage}\nModel readiness: {_readyState}\nWindows: {Environment.OSVersion}\nHRESULT: 0x{ex.HResult:X8}\n{ex}");
             return path;
         }
         catch { return "could not write diagnostic file"; }
@@ -165,7 +165,7 @@ public sealed class NarrationService : IDisposable
         catch (Exception ex)
         {
             WriteDiagnostic(ex);
-            Status?.Invoke("Windows did not finish the last phrase. Check the final step notes. " + ex.Message);
+            Status?.Invoke("The last phrase could not be transcribed. You can add it to the step notes.");
         }
         finally
         {

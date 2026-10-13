@@ -361,3 +361,14 @@ supported Windows PC with the model installed; CI does not have a physical mic.
 References:
 - https://learn.microsoft.com/windows/ai/apis/speech-recognition
 - https://learn.microsoft.com/windows/apps/windows-app-sdk/release-notes/windows-app-sdk-2-0?pivots=experimental
+
+
+## 0.5.6 — simpler microphone settings
+
+Settings shows the narration toggle, microphone picker and a single **Test
+microphone** button with a live input meter. Opening the picker refreshes connected
+devices. Technical speech checks, setup buttons, version labels and diagnostic
+instructions are removed from the user interface. Speech startup errors remain
+in the internal diagnostic log; users see a short status. Windows AI remains
+the only transcription engine. Download **WriteUp-0.5.6-Windows-Offline-Speech**
+from Actions and register the complete folder using the existing script.

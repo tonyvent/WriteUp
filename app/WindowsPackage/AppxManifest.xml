@@ -4,7 +4,7 @@
          xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
          xmlns:systemai="http://schemas.microsoft.com/appx/manifest/systemai/windows10"
          IgnorableNamespaces="uap rescap systemai">
-  <Identity Name="WriteUp.Desktop" Publisher="CN=WriteUp Development" Version="0.5.5.0" ProcessorArchitecture="x64" />
+  <Identity Name="WriteUp.Desktop" Publisher="CN=WriteUp Development" Version="0.5.6.0" ProcessorArchitecture="x64" />
   <Properties>
     <DisplayName>WriteUp</DisplayName><PublisherDisplayName>Anthony Venturini</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>

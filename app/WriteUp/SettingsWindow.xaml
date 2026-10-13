@@ -26,40 +26,17 @@
                 <CheckBox x:Name="NarrationCheck" Margin="0,8,0,10">
                     <TextBlock Text="Listen and transcribe automatically when recording starts" TextWrapping="Wrap"/>
                 </CheckBox>
-                <TextBlock Text="Windows offline speech · WriteUp 0.5.5" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                <TextBlock Text="Uses the modern Windows on-device speech engine only. Audio stays on this PC. No keys, subscriptions, legacy engines or cloud fallback." TextWrapping="Wrap" Margin="0,0,0,8"/>
-                <TextBlock Text="Requires Windows 11 24H2 or later and an installed Windows AI speech component. If the component is missing, Set up Windows speech asks Windows to prepare it. A one-time Windows Update download may be required. No model is bundled with WriteUp." TextWrapping="Wrap" Margin="0,0,0,8"/>
-                <WrapPanel>
-                    <Button x:Name="PrepareSpeechBtn" Content="Set up Windows speech" Click="PrepareSpeech_Click" Margin="0,0,8,8"/>
-                    <Button x:Name="CheckSpeechBtn" Content="Check offline speech" Click="CheckSpeech_Click" Margin="0,0,8,8"/>
-                    <Button Content="Microphone permissions" Click="MicrophoneSettings_Click" Margin="0,0,0,8"/>
-                </WrapPanel>
                 <TextBlock Text="Microphone" Margin="0,4,0,4"/>
-                <ComboBox x:Name="MicrophoneBox" Margin="0,0,0,6" SelectionChanged="Microphone_SelectionChanged"
-                          AutomationProperties.Name="Microphone used for transcription">
+                <ComboBox x:Name="MicrophoneBox" Margin="0,0,0,12" DropDownOpened="Microphone_DropDownOpened"
+                          AutomationProperties.Name="Microphone">
                     <ComboBox.ItemTemplate>
                         <DataTemplate><TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/></DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
-                <TextBlock x:Name="SelectedInputText" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}" Margin="0,0,0,8"/>
-                <Button x:Name="DefaultInputBtn" Content="Select current Windows default" Click="DefaultInput_Click" HorizontalAlignment="Left" Margin="0,0,0,8"/>
-                <TextBlock Text="Recognition uses this exact microphone, even when Windows has a different default input." TextWrapping="Wrap" Margin="0,0,0,8"/>
-                <WrapPanel>
-                    <Button x:Name="InputTestBtn" Content="Test selected input level" Click="InputTest_Click" Margin="0,0,8,8"/>
-                    <Button Content="Windows input settings" Click="InputSelection_Click" Margin="0,0,0,8"/>
-                </WrapPanel>
-                <TextBlock Text="Language is supplied by the Windows offline speech model." TextWrapping="Wrap" Margin="0,4,0,10"/>
-                <WrapPanel>
-                    <Button x:Name="TestMicBtn" Content="Test transcription" Click="TestMic_Click" Margin="0,0,8,8"/>
-                    <Button x:Name="RefreshDevicesBtn" Content="Refresh devices" Click="RefreshDevices_Click" Margin="0,0,8,8"/>
-                    <Button Content="Windows sound settings" Click="SoundSettings_Click" Margin="0,0,8,8"/>
-                </WrapPanel>
-                <ProgressBar x:Name="MicLevel" Minimum="0" Maximum="100" Height="10" Margin="0,0,0,8"/>
-                <TextBlock x:Name="MicStatus" Text="Choose your microphone, test its input level, then test transcription." TextWrapping="Wrap"/>
-                <Border Background="{StaticResource BgBrush}" CornerRadius="6" Padding="10" Margin="0,8,0,0">
-                    <TextBlock x:Name="TestTranscript" Text="Test results appear here." TextWrapping="Wrap" FontWeight="SemiBold"/>
-                </Border>
-                <TextBlock Text="If the Windows component is missing or unsupported, narration stops with its actual availability status. Screenshot recording remains available." TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0"/>
+                <Button x:Name="InputTestBtn" Content="Test microphone" Click="InputTest_Click" HorizontalAlignment="Left" Margin="0,0,0,10"/>
+                <ProgressBar x:Name="MicLevel" Minimum="0" Maximum="100" Height="8" Margin="0,0,0,8"
+                             AutomationProperties.Name="Microphone input level"/>
+                <TextBlock x:Name="MicStatus" Text="" TextWrapping="Wrap" Foreground="{StaticResource MutedBrush}"/>
             </StackPanel>
         </Border>
         <Border Background="{StaticResource PanelBrush}" CornerRadius="10" Padding="14" Margin="0,0,0,10">
