@@ -22,7 +22,7 @@ public partial class App : Application
                 if (!WindowsAppLaunch.HasIdentity) throw new InvalidOperationException(WindowsAppLaunch.RegistrationError);
                 var ready = Microsoft.Windows.AI.Speech.SpeechRecognitionModelFactory.Default.GetReadyState();
                 System.IO.File.WriteAllText(System.IO.Path.Combine(AppContext.BaseDirectory, "speech-runtime-test.json"),
-                    System.Text.Json.JsonSerializer.Serialize(new { success = true, identity = Windows.ApplicationModel.Package.Current.Id.FullName, readiness = ready.ToString() }));
+                    System.Text.Json.JsonSerializer.Serialize(new { success = true, identity = global::Windows.ApplicationModel.Package.Current.Id.FullName, readiness = ready.ToString() }));
                 Shutdown(0);
             }
             catch (Exception ex)
