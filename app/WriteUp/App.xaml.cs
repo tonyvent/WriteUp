@@ -13,7 +13,7 @@ public partial class App : Application
         if (e.Args.Contains("--speech-runtime-test") || System.IO.File.Exists(probeFlag))
         {
             System.IO.File.WriteAllText(probeFlag, "pending");
-            StartupUri = null; ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
             base.OnStartup(e);
             if (!WindowsAppLaunch.HasIdentity)
             {
@@ -40,8 +40,7 @@ public partial class App : Application
         // Test hosts instantiate App too; only the actual desktop EXE hands off.
         if (Assembly.GetEntryAssembly()?.GetName().Name != "WriteUp" || WindowsAppLaunch.HasIdentity ||
             !OperatingSystem.IsWindowsVersionAtLeast(10, 0, 26100))
-        { base.OnStartup(e); return; }
-        StartupUri = null;
+        { base.OnStartup(e); MainWindow = new MainWindow(); MainWindow.Show(); return; }
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
         base.OnStartup(e);
         var starting = new Window
